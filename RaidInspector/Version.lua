@@ -1,0 +1,3 @@
+local addonName, ns = ...
+
+ns.VERSION = "0.1.0"
