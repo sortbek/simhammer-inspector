@@ -117,9 +117,15 @@ print("}")
 
 - [ ] **Step 2: Generate the fixture**
 
+Do **not** use `Set-Content -Encoding utf8` here: Windows PowerShell 5.1 writes a BOM, and
+Lua 5.1 fails to parse the file with `unexpected symbol near '<bom>'`. It also violates the
+project's UTF-8-without-BOM constraint. Write the file explicitly instead:
+
 ```powershell
 $sv = "C:\Program Files (x86)\World of Warcraft\_retail_\WTF\Account\JEFFWIENEN\SavedVariables\RaidInspectorSpike.lua"
-& "tools\lua\lua5.1.exe" "tools\extract-hydrated.lua" $sv | Set-Content -Encoding utf8 "spec\fixtures\hydrated.lua"
+$out = & "tools\lua\lua5.1.exe" "tools\extract-hydrated.lua" $sv
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText("$PWD\spec\fixtures\hydrated.lua", ($out -join "`n") + "`n", $utf8NoBom)
 & "tools\lua\lua5.1.exe" -e "local t = dofile('spec/fixtures/hydrated.lua'); print(table.getn(t) .. ' records')"
 ```
 
@@ -490,12 +496,11 @@ end)
 powershell -ExecutionPolicy Bypass -File tools\test.ps1 -Filter "Rules"
 ```
 
-Expected: the five new tests fail. **Six** of the twelve adapted tests fail as well, because
-`evaluateSlot` now receives an item record where it expects a parse result. The other six
-adapted tests pass vacuously: they only assert `is_nil`, and an item record read as a parse
-result produces a `missing_item` finding rather than the enchant finding they look for. That
-is exactly the kind of silently-passing test the refactor has to fix, so do not take those
-six as evidence that anything works.
+Expected: `10 passed, 14 failed`. Both the five new tests and nine of the adapted ones fail,
+because `evaluateSlot` now receives an item record where it still expects a parse result:
+`checkGems` indexes `parsed.gemIDs`, which is `nil` on an item record, and that is a hard
+error. The ten that still pass are the ones whose assertions do not depend on the enchant or
+gem path — do not read those as evidence that anything works yet.
 
 - [ ] **Step 4: Adapt the implementation**
 
@@ -665,7 +670,9 @@ end)
 powershell -ExecutionPolicy Bypass -File tools\test.ps1 -Filter "Rules sockets"
 ```
 
-Expected: eight failures.
+Expected: `4 passed, 4 failed`. Only the four tests asserting on an actual finding fail; the
+four `is_nil` assertions hold vacuously while the finding does not exist yet. That is normal
+for a not-yet-implemented check, but it means the four passes prove nothing.
 
 - [ ] **Step 3: Write the implementation**
 
