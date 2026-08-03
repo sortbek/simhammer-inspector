@@ -122,18 +122,30 @@ end
 -- error: BugGrabber was capturing them and no display addon was installed. One
 -- unavailable or renamed API silently killed the entire scanner every second.
 -- Guessing which one wastes a raid night; measuring costs nothing.
+-- Patch 12.0 introduced "secret" values: an insecure addon may hold one but may
+-- not branch on it. UnitInRange now returns such a value, and evaluating it
+-- throws "attempt to perform boolean test on a secret boolean value". Coercion
+-- therefore happens through pcall, and a value that cannot be tested comes back
+-- as nil meaning "unknowable" rather than as false.
+local function toBool(value)
+  local ok, result = pcall(function() return value and true or false end)
+  if ok then return result end
+  return nil
+end
+
 local function call1(results, name, fn, ...)
   if type(fn) ~= "function" then
     results[name] = "MISSING"
     return nil
   end
-  local ok, a, b = pcall(fn, ...)
+  local ok, a = pcall(fn, ...)
   if not ok then
     results[name] = "ERROR: " .. tostring(a)
     return nil
   end
-  results[name] = a
-  return a, b
+  local b = toBool(a)
+  results[name] = (b == nil) and "SECRET" or b
+  return b
 end
 
 function Scanner.probe(unit)
@@ -143,30 +155,30 @@ function Scanner.probe(unit)
     return p
   end
 
-  p.exists = call1(p.calls, "UnitExists", UnitExists, unit) and true or false
-  if not p.exists then return p end
+  p.exists = call1(p.calls, "UnitExists", UnitExists, unit)
+  if p.exists == false then return p end
 
-  p.isPlayer  = call1(p.calls, "UnitIsPlayer", UnitIsPlayer, unit) and true or false
-  p.connected = call1(p.calls, "UnitIsConnected", UnitIsConnected, unit) and true or false
-  p.visible   = call1(p.calls, "UnitIsVisible", UnitIsVisible, unit) and true or false
-  p.canInspect = call1(p.calls, "CanInspect", CanInspect, unit, false) and true or false
-
-  local inRange, checked = call1(p.calls, "UnitInRange", UnitInRange, unit)
-  p.inRange = inRange and true or false
-  p.rangeChecked = checked and true or false
+  p.isPlayer   = call1(p.calls, "UnitIsPlayer", UnitIsPlayer, unit)
+  p.connected  = call1(p.calls, "UnitIsConnected", UnitIsConnected, unit)
+  p.canInspect = call1(p.calls, "CanInspect", CanInspect, unit, false)
+  p.inRange    = call1(p.calls, "UnitInRange", UnitInRange, unit)
 
   return p
 end
 
--- UnitInRange is a coarse 40 yd hint and refuses to answer for units it cannot
--- check; when it declines, fall back to letting the request through and let the
--- INSPECT_READY timeout be the real out-of-range signal, exactly as the spec
--- says. Treating an unanswerable hint as "out of range" stops the scanner dead.
+-- Only a definite "no" excludes a player. Anything unknowable -- a secret value,
+-- a missing API -- lets the request through, and the INSPECT_READY timeout
+-- becomes the real out-of-range signal, exactly as the spec says it should be.
+--
+-- UnitInRange is deliberately not consulted here: since 12.0 it returns a secret
+-- value that cannot be branched on at all. It was never more than a coarse 40 yd
+-- proxy for a 28 yd limit anyway, so the tiers are now driven by measured
+-- reachability -- timeout history -- instead of a hint that lied either way.
 local function passesPrefilter(p)
-  if not p.exists or not p.isPlayer then return false end
+  if p.exists == false then return false end
+  if p.isPlayer == false then return false end
   if p.connected == false then return false end
-  if not p.canInspect then return false end
-  if p.rangeChecked and not p.inRange then return false end
+  if p.canInspect == false then return false end
   return true
 end
 
