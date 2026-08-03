@@ -237,7 +237,13 @@ local function debugDump()
   if status.pausedBy then say("  paused by: " .. status.pausedBy) end
 
   local s = ns.Scanner.stats
-  say(string.format("  ticks=%d requests=%d prefilterPasses=%d", s.ticks, s.requests, s.hintPasses))
+  -- The answer rate is the number that matters. A low rate with everyone
+  -- standing together means requests are being dropped, not that people are far
+  -- away, and the response to that is to ask for less rather than more.
+  local rate = (s.requests > 0) and math.floor(s.answered / s.requests * 100) or 0
+  say(string.format("  ticks=%d prefilterPasses=%d", s.ticks, s.hintPasses))
+  say(string.format("  requests=%d answered=%d (%d%%) timedOut=%d foreignHarvests=%d",
+      s.requests, s.answered, rate, s.timedOut, s.harvestedForeign))
   say(string.format("  exits: paused=%d pending=%d budget=%d noCandidate=%d",
       s.exitPaused, s.exitPending, s.exitBudget, s.exitNoCandidate))
 

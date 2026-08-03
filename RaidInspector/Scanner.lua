@@ -110,6 +110,7 @@ local function onInspectReady(guid)
 
   if isOurs then
     pending = nil
+    Scanner.stats.answered = Scanner.stats.answered + 1
     queue:onSuccess(guid, returned, serverNow())
     if allSlotsConfirmed(recordFor(guid)) then
       queue:onConfirmed(guid, serverNow())
@@ -120,7 +121,9 @@ local function onInspectReady(guid)
       ClearInspectPlayer()
     end
   else
-    -- Free coverage from someone else's inspect.
+    -- Free coverage from someone else's inspect. Worth counting separately:
+    -- disabling a competing addon frees budget but also removes these.
+    Scanner.stats.harvestedForeign = Scanner.stats.harvestedForeign + 1
     queue:onSuccess(guid, returned, serverNow())
   end
 end
@@ -210,7 +213,8 @@ end
 -- everyone" produced identical output in a live raid, because addPlayer starts
 -- players at inRange=false. Counting each exit tells them apart.
 Scanner.stats = { ticks = 0, hintPasses = 0, exitPaused = 0, exitPending = 0,
-                  exitBudget = 0, exitNoCandidate = 0, requests = 0 }
+                  exitBudget = 0, exitNoCandidate = 0, requests = 0,
+                  answered = 0, timedOut = 0, harvestedForeign = 0 }
 
 -- Your own gear never needs an inspect: GetInventoryItemLink works on "player"
 -- directly and always returns everything. Queueing yourself wastes budget and,
@@ -236,6 +240,7 @@ local function tick()
   end
 
   if pending and (now() - pending.at) > Scanner.config.timeoutSeconds then
+    Scanner.stats.timedOut = Scanner.stats.timedOut + 1
     queue:onTimeout(pending.guid, serverNow())
     pending = nil
   end
