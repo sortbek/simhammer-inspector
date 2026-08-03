@@ -496,12 +496,11 @@ end)
 powershell -ExecutionPolicy Bypass -File tools\test.ps1 -Filter "Rules"
 ```
 
-Expected: the five new tests fail. **Six** of the twelve adapted tests fail as well, because
-`evaluateSlot` now receives an item record where it expects a parse result. The other six
-adapted tests pass vacuously: they only assert `is_nil`, and an item record read as a parse
-result produces a `missing_item` finding rather than the enchant finding they look for. That
-is exactly the kind of silently-passing test the refactor has to fix, so do not take those
-six as evidence that anything works.
+Expected: `10 passed, 14 failed`. Both the five new tests and nine of the adapted ones fail,
+because `evaluateSlot` now receives an item record where it still expects a parse result:
+`checkGems` indexes `parsed.gemIDs`, which is `nil` on an item record, and that is a hard
+error. The ten that still pass are the ones whose assertions do not depend on the enchant or
+gem path — do not read those as evidence that anything works yet.
 
 - [ ] **Step 4: Adapt the implementation**
 

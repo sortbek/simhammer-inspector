@@ -68,10 +68,28 @@ local function checkGems(findings, slot, parsed, slotRecord, context)
   end
 end
 
-function Rules.evaluateSlot(slot, parsed, slotRecord, context)
+local function checkUpgrade(findings, slot, upgrade, slotRecord, context)
+  -- No upgrade information means UNKNOWN. The spike showed 78 of 184 items have
+  -- no upgrade line in the tooltip; they are not all fully upgraded, so staying
+  -- silent here is the only correct choice.
+  if not upgrade then return end
+  if not upgrade.rank or not upgrade.max then return end
+
+  if upgrade.rank < upgrade.max then
+    add(findings, slot, "upgrades_left", "warn",
+        stateFor(slotRecord, { "tooltipComplete" }, context),
+        upgrade.rank .. "/" .. upgrade.max .. " " .. tostring(upgrade.track))
+  end
+end
+
+-- The second parameter is an item record rather than a bare parse result,
+-- because three of the checks need hydrated data that is not in the item link.
+-- Passing those as separate parameters would grow the signature with every new
+-- source.
+function Rules.evaluateSlot(slot, item, slotRecord, context)
   local findings = {}
 
-  if not parsed then
+  if not item or not item.parsed then
     -- A two-handed weapon makes an empty off-hand correct, not a finding.
     local isEmptyOffhandWithTwoHander = (slot == 17 and context.twoHanded)
     if not isEmptyOffhandWithTwoHander then
@@ -82,8 +100,9 @@ function Rules.evaluateSlot(slot, parsed, slotRecord, context)
     return findings
   end
 
-  checkEnchant(findings, slot, parsed, slotRecord, context)
-  checkGems(findings, slot, parsed, slotRecord, context)
+  checkEnchant(findings, slot, item.parsed, slotRecord, context)
+  checkGems(findings, slot, item.parsed, slotRecord, context)
+  checkUpgrade(findings, slot, item.upgrade, slotRecord, context)
 
   return findings
 end
@@ -125,7 +144,7 @@ function Rules.evaluatePlayer(slots, context)
   local findings = {}
 
   for slot, entry in pairs(slots) do
-    local slotFindings = Rules.evaluateSlot(slot, entry.parsed, entry.record, context)
+    local slotFindings = Rules.evaluateSlot(slot, entry, entry.record, context)
     for i = 1, table.getn(slotFindings) do
       findings[table.getn(findings) + 1] = slotFindings[i]
     end
