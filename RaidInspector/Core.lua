@@ -246,6 +246,13 @@ local function debugDump()
       s.requests, s.answered, rate, s.timedOut, s.harvestedForeign))
   say(string.format("  exits: paused=%d pending=%d budget=%d noCandidate=%d",
       s.exitPaused, s.exitPending, s.exitBudget, s.exitNoCandidate))
+  say(string.format("  INSPECT_READY events=%d tokenResolveFailed=%d via=%s",
+      s.inspectReadyEvents, s.tokenResolveFailed, tostring(s.resolvedVia)))
+  if s.selfError then
+    say("  |cffff4444self scan error:|r " .. s.selfError)
+  else
+    say(string.format("  self scan: %s slots", tostring(s.selfSlots)))
+  end
 
   -- The range hint is the reason a player is skipped far more often than the
   -- tier is, so it has to be visible here. In a live raid "tier=A" for everyone

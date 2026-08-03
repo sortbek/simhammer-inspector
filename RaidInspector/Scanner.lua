@@ -99,11 +99,33 @@ local function allSlotsConfirmed(record)
   return seen > 0 and confirmed == seen
 end
 
-local function onInspectReady(guid)
+-- UnitTokenFromGUID is documented as unstable and may simply not resolve. The
+-- roster already holds a GUID to unit-token mapping, so fall back to it rather
+-- than dropping the event: silently discarding a reply we asked for looks
+-- exactly like never getting one.
+local function resolveUnit(guid)
   local unit = UnitTokenFromGUID and UnitTokenFromGUID(guid)
-  -- UnitTokenFromGUID is documented as unstable, so the token is verified before
-  -- anything is read off it. Raid indices shift between request and reply.
-  if not unit or UnitGUID(unit) ~= guid then return end
+  if unit and UnitGUID(unit) == guid then return unit, "UnitTokenFromGUID" end
+
+  local info = ns.Roster.get(guid)
+  if info and info.unit and UnitGUID(info.unit) == guid then
+    return info.unit, "roster"
+  end
+
+  return nil, nil
+end
+
+local function onInspectReady(guid)
+  Scanner.stats.inspectReadyEvents = Scanner.stats.inspectReadyEvents + 1
+
+  local unit, how = resolveUnit(guid)
+  if not unit then
+    Scanner.stats.tokenResolveFailed = Scanner.stats.tokenResolveFailed + 1
+    -- Still clear our pending slot: the reply arrived, we just could not use it.
+    if pending and pending.guid == guid then pending = nil end
+    return
+  end
+  Scanner.stats.resolvedVia = how
 
   local returned = harvest(unit, guid)
   local isOurs = (pending and pending.guid == guid)
@@ -214,7 +236,9 @@ end
 -- players at inRange=false. Counting each exit tells them apart.
 Scanner.stats = { ticks = 0, hintPasses = 0, exitPaused = 0, exitPending = 0,
                   exitBudget = 0, exitNoCandidate = 0, requests = 0,
-                  answered = 0, timedOut = 0, harvestedForeign = 0 }
+                  answered = 0, timedOut = 0, harvestedForeign = 0,
+                  inspectReadyEvents = 0, tokenResolveFailed = 0,
+                  resolvedVia = nil, selfSlots = nil, selfError = nil }
 
 -- Your own gear never needs an inspect: GetInventoryItemLink works on "player"
 -- directly and always returns everything. Queueing yourself wastes budget and,
@@ -313,9 +337,21 @@ function Scanner.init(q, c, r)
   C_Timer.NewTicker(Scanner.config.tickSeconds, tick)
 
   -- Own gear is free and always complete, so take it immediately and keep it
-  -- refreshed rather than waiting for the queue to come round.
-  C_Timer.After(2, function() pcall(Scanner.scanSelf) end)
-  C_Timer.NewTicker(30, function() pcall(Scanner.scanSelf) end)
+  -- refreshed rather than waiting for the queue to come round. The error is
+  -- recorded, not swallowed: a silent pcall around this is what hid the last
+  -- three faults in this file.
+  local function selfScan()
+    local ok, err = pcall(Scanner.scanSelf)
+    if ok then
+      Scanner.stats.selfSlots = err
+      Scanner.stats.selfError = nil
+    else
+      Scanner.stats.selfError = tostring(err)
+    end
+  end
+
+  C_Timer.After(2, selfScan)
+  C_Timer.NewTicker(30, selfScan)
 end
 
 -- Priority pass for the moment just before the pull, when the raid is stacked
