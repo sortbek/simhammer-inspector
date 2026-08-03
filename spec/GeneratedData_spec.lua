@@ -9,7 +9,7 @@ local function data()
     "RaidInspector/Data/Enchants.lua",
     "RaidInspector/Data/Gems.lua",
     "RaidInspector/Data/Version.lua",
-    "RaidInspector/Data/Embellishments.lua",
+    "RaidInspector/Data/TierSets.lua",
   }).Data
 end
 

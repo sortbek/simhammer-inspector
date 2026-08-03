@@ -12,8 +12,8 @@ Season.CURRENT_TIER = "midnight-s1"
 
 Season.MAX_EMBELLISHMENTS = 2
 
--- The only place the current tier set IDs live. Deliberately not in Data/ as
--- well, because two sources for the same fact are guaranteed to drift apart.
--- Fill in with the set IDs from the spike; the empty table keeps the tier check
--- inactive rather than producing wrong findings.
-Season.TIER_SET_IDS = {}
+-- Points at the generated table rather than restating it. Which sets are the
+-- current tier turned out to be derivable -- five-piece sets in the current item
+-- ID block -- so hand-copying thirteen IDs would only introduce a second source
+-- to drift out of step. There is still exactly one authority.
+Season.TIER_SET_IDS = ns.Data and ns.Data.TierSets or {}

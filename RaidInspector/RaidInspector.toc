@@ -7,7 +7,7 @@ Version.lua
 Data\Version.lua
 Data\Enchants.lua
 Data\Gems.lua
-Data\Embellishments.lua
+Data\TierSets.lua
 Policy\Slots.lua
 Policy\Season.lua
 LinkParser.lua
@@ -20,6 +20,7 @@ Cache.lua
 Roster.lua
 Hydrator.lua
 Scanner.lua
+UI\Theme.lua
 UI\Grid.lua
 UI\Detail.lua
 Core.lua

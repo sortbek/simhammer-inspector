@@ -12,53 +12,82 @@ local SLOT_NAMES = {
   [16] = "Main Hand", [17] = "Off Hand",
 }
 
-local STATE_COLOUR = {
-  ok      = "|cff44cc44",
-  warn    = "|cffffcc00",
-  bad     = "|cffff4444",
-  unknown = "|cff888888",
-}
+local C = ns.Theme.colour
+local ROW_H = 15
+local WIDTH = 330
 
-local frame, scroll, content, lines, titleText
+local frame, scroll, content, titleText, subText
+local slotRows = {}
 
-local function acquireLine(index)
-  if not lines[index] then
-    local fs = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    fs:SetPoint("TOPLEFT", content, "TOPLEFT", 4, -(index - 1) * 14)
-    fs:SetWidth(340)
-    fs:SetJustifyH("LEFT")
-    lines[index] = fs
+local function acquireRow(index)
+  if not slotRows[index] then
+    local row = CreateFrame("Frame", nil, content)
+    row:SetSize(WIDTH, ROW_H)
+    row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -(index - 1) * ROW_H)
+
+    row.marker = row:CreateTexture(nil, "ARTWORK")
+    row.marker:SetSize(3, ROW_H - 4)
+    row.marker:SetPoint("LEFT", row, "LEFT", 0, 0)
+
+    row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.label:SetPoint("LEFT", row, "LEFT", 10, 0)
+    row.label:SetJustifyH("LEFT")
+
+    slotRows[index] = row
   end
-  return lines[index]
+  return slotRows[index]
 end
 
 local function create()
   if frame then return end
 
-  frame = CreateFrame("Frame", "RaidInspectorDetail", UIParent, "BasicFrameTemplateWithInset")
-  frame:SetSize(370, 400)
-  frame:SetPoint("CENTER", UIParent, "CENTER", 320, 0)
+  frame = CreateFrame("Frame", "RaidInspectorDetail", UIParent)
+  frame:SetSize(WIDTH + 40, 420)
+  frame:SetPoint("CENTER", UIParent, "CENTER", 340, 0)
   frame:SetMovable(true)
   frame:EnableMouse(true)
   frame:RegisterForDrag("LeftButton")
   frame:SetScript("OnDragStart", frame.StartMoving)
   frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
   frame:SetClampedToScreen(true)
+  frame:SetFrameStrata("HIGH")
+  ns.Theme.panel(frame)
 
-  titleText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  titleText:SetPoint("TOP", frame, "TOP", 0, -5)
+  local titleBar = CreateFrame("Frame", nil, frame)
+  titleBar:SetPoint("TOPLEFT")
+  titleBar:SetPoint("TOPRIGHT")
+  titleBar:SetHeight(26)
+  ns.Theme.panel(titleBar, C.header)
 
-  scroll = CreateFrame("ScrollFrame", "RaidInspectorDetailScroll", frame, "UIPanelScrollFrameTemplate")
-  scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", 10, -28)
-  scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -30, 10)
+  titleText = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  titleText:SetPoint("LEFT", titleBar, "LEFT", 12, 0)
+  ns.Theme.setText(titleText, C.textPrimary)
+
+  local close = CreateFrame("Button", nil, titleBar, "UIPanelCloseButton")
+  close:SetPoint("RIGHT", titleBar, "RIGHT", -2, 0)
+  close:SetSize(24, 24)
+
+  subText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  subText:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -32)
+  subText:SetJustifyH("LEFT")
+  ns.Theme.setText(subText, C.textMuted)
+
+  scroll = CreateFrame("ScrollFrame", "RaidInspectorDetailScroll", frame,
+                       "UIPanelScrollFrameTemplate")
+  scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -50)
+  scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -28, 12)
 
   content = CreateFrame("Frame", nil, scroll)
-  content:SetSize(340, 1)
+  content:SetSize(WIDTH, 1)
   scroll:SetScrollChild(content)
 
-  lines = {}
   frame:Hide()
 end
+
+local SEVERITY = {
+  error = { 0.93, 0.31, 0.31 },
+  warn  = { 0.92, 0.70, 0.18 },
+}
 
 function Detail.show(guid)
   create()
@@ -66,52 +95,73 @@ function Detail.show(guid)
   local entry = ns.Core and ns.Core.entryFor and ns.Core.entryFor(guid)
   if not entry then
     titleText:SetText("Raid Inspector")
-    acquireLine(1):SetText("|cff888888no data for this player yet|r")
-    for i = 2, table.getn(lines) do lines[i]:SetText("") end
-    content:SetHeight(20)
+    subText:SetText("no data for this player yet")
+    for i = 1, table.getn(slotRows) do slotRows[i]:Hide() end
     frame:Show()
     return
   end
 
+  local r, g, b = ns.Theme.mutedClassColour(entry.class)
   titleText:SetText(entry.name or "?")
+  titleText:SetTextColor(r, g, b)
+
+  subText:SetText(string.format("item level %s%s",
+                  entry.ilvl and string.format("%.1f", entry.ilvl) or "unknown",
+                  entry.stale and "     stale" or ""))
 
   local n = 0
-  local function addLine(text)
+  local function row(marker, text, colour)
     n = n + 1
-    acquireLine(n):SetText(text)
+    local it = acquireRow(n)
+    it:Show()
+    if marker then
+      it.marker:SetColorTexture(marker[1], marker[2], marker[3], 0.85)
+      it.marker:Show()
+    else
+      it.marker:Hide()
+    end
+    it.label:SetText(text)
+    it.label:SetTextColor(colour[1], colour[2], colour[3])
   end
-
-  addLine(string.format("average item level: %s%s",
-          entry.ilvl and string.format("%.1f", entry.ilvl) or "unknown",
-          entry.stale and "   |cff888888(stale)|r" or ""))
-  addLine(" ")
 
   for i = 1, table.getn(SLOT_ORDER) do
     local slot = SLOT_ORDER[i]
     local info = entry.slots and entry.slots[slot]
     local name = SLOT_NAMES[slot] or ("Slot " .. slot)
 
-    if not info then
-      addLine(string.format("|cff555555%-12s not scanned|r", name))
+    if not info or info.state == "unknown" and not info.itemName then
+      row(nil, name .. "   not scanned", C.textFaint)
     else
-      local colour = STATE_COLOUR[info.state] or STATE_COLOUR.unknown
-      addLine(string.format("%s%-12s|r %s", colour, name, info.itemName or ""))
+      local marker = ns.Theme.state[info.state]
+      row(marker and marker.edge or nil,
+          name .. "   " .. (info.itemName or ""),
+          C.textPrimary)
+
       if info.findings then
         for j = 1, table.getn(info.findings) do
           local f = info.findings[j]
-          local c = (f.state == "unknown") and STATE_COLOUR.unknown
-                    or ((f.severity == "error") and STATE_COLOUR.bad or STATE_COLOUR.warn)
-          -- Unknown findings are shown here, unlike in the chat report: this is
-          -- the view you open deliberately to understand one player, so "we do
-          -- not know yet" is useful rather than noise.
-          addLine(string.format("    %s%s|r  |cff666666(%s)|r", c, f.detail, f.state))
+          -- Unknown findings appear here, unlike in the chat report: this view
+          -- is opened deliberately to understand one player, so "we do not know
+          -- yet" is useful rather than noise.
+          local c = (f.state == "unknown") and { 0.42, 0.44, 0.50 }
+                    or (SEVERITY[f.severity] or SEVERITY.warn)
+          row(nil, "        " .. f.detail, c)
         end
       end
     end
   end
 
-  for i = n + 1, table.getn(lines) do lines[i]:SetText("") end
-  content:SetHeight(math.max(1, n * 14))
+  if entry.playerFindings then
+    for i = 1, table.getn(entry.playerFindings) do
+      local f = entry.playerFindings[i]
+      local c = (f.state == "unknown") and { 0.42, 0.44, 0.50 }
+                or (SEVERITY[f.severity] or SEVERITY.warn)
+      row(nil, "        " .. f.detail, c)
+    end
+  end
+
+  for i = n + 1, table.getn(slotRows) do slotRows[i]:Hide() end
+  content:SetHeight(math.max(1, n * ROW_H))
   frame:Show()
 end
 

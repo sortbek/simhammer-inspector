@@ -62,11 +62,15 @@ local function findingsFor(guid)
 
   local slots = {}
   for slot, slotRecord in pairs(record.slots) do
+    local item = slotRecord.item
     slots[slot] = {
-      parsed      = slotRecord.item and slotRecord.item.parsed or nil,
-      socketCount = slotRecord.item and slotRecord.item.socketCount or nil,
-      upgrade     = slotRecord.item and slotRecord.item.upgrade or nil,
-      setID       = slotRecord.item and slotRecord.item.setID or nil,
+      parsed      = item and item.parsed or nil,
+      socketCount = item and item.socketCount or nil,
+      upgrade     = item and item.upgrade or nil,
+      setID       = item and item.setID or nil,
+      -- Not `item and item.embellished or nil`: that turns a definite false into
+      -- nil, and nil means unknown, which silences the whole check.
+      embellished = item and item.embellished,
       record      = slotRecord,
     }
   end

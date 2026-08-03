@@ -3,8 +3,8 @@ local addonName, ns = ...
 local Grid = {}
 ns.Grid = Grid
 
--- The grid is player rows by gear-slot columns. Cells are pooled and only the
--- row whose data just arrived is redrawn; the grid is never rebuilt per event.
+-- Player rows by gear-slot columns. Cells are pooled and only the row whose data
+-- just arrived is redrawn; the grid is never rebuilt per event.
 
 local SLOTS = { 1, 2, 3, 15, 5, 9, 10, 6, 7, 8, 11, 12, 13, 14, 16, 17 }
 
@@ -21,91 +21,90 @@ local SLOT_NAMES = {
   [16] = "Main Hand", [17] = "Off Hand",
 }
 
--- Four states, distinguished by glyph as well as colour. Red against green is
--- unreadable for a good share of players, so colour is never the only channel.
-local STATE_STYLE = {
-  ok      = { r = 0.16, g = 0.50, b = 0.24, glyph = "",  text = { 1, 1, 1 } },
-  warn    = { r = 0.62, g = 0.47, b = 0.05, glyph = "!", text = { 1, 0.95, 0.7 } },
-  bad     = { r = 0.60, g = 0.15, b = 0.15, glyph = "\226\156\149", text = { 1, 0.85, 0.85 } },
-  unknown = { r = 0.20, g = 0.20, b = 0.22, glyph = "?", text = { 0.6, 0.6, 0.65 } },
-}
+local M = ns.Theme.metrics
+local C = ns.Theme.colour
 
-local ROW_HEIGHT   = 18
-local CELL_SIZE    = 16
-local CELL_GAP     = 2
-local NAME_WIDTH   = 110
-local ILVL_WIDTH   = 46
-local SUMMARY_WIDTH = 52
-local HEADER_HEIGHT = 46
-
-local frame, scroll, content, coverageText
+local frame, scroll, content, coverageText, subText, sortButton
 local rows = {}
-local rowByGuid = {}
 local sortMode = "issues"
+local lastEntries, lastCoverage
 
 local function gridWidth()
-  return NAME_WIDTH + ILVL_WIDTH + (table.getn(SLOTS) * (CELL_SIZE + CELL_GAP)) + SUMMARY_WIDTH + 24
+  return M.nameWidth + M.ilvlWidth
+         + (table.getn(SLOTS) * (M.cellSize + M.cellGap))
+         + M.summaryWidth
 end
 
--- Worst state wins per slot: an error outranks a warning outranks unknown.
-local function worstState(findings)
-  local seen = nil
-  for i = 1, table.getn(findings) do
-    local f = findings[i]
-    if f.state == "bad" then
-      if f.severity == "error" then return "bad" end
-      seen = "warn"
-    elseif f.state == "unknown" and seen == nil then
-      seen = "unknown"
-    end
-  end
-  return seen or "ok"
-end
-
-local function classColour(class)
-  local c = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
-  if c then return c.r, c.g, c.b end
-  return 0.8, 0.8, 0.8
+local function cellX(index)
+  return M.nameWidth + M.ilvlWidth + (index - 1) * (M.cellSize + M.cellGap)
 end
 
 local function makeCell(parent, index)
   local cell = CreateFrame("Button", nil, parent)
-  cell:SetSize(CELL_SIZE, CELL_SIZE)
-  cell:SetPoint("LEFT", parent, "LEFT",
-                NAME_WIDTH + ILVL_WIDTH + (index - 1) * (CELL_SIZE + CELL_GAP), 0)
+  cell:SetSize(M.cellSize, M.cellSize)
+  cell:SetPoint("LEFT", parent, "LEFT", cellX(index), 0)
 
-  cell.bg = cell:CreateTexture(nil, "BACKGROUND")
-  cell.bg:SetAllPoints()
+  cell.fill = cell:CreateTexture(nil, "ARTWORK")
+  cell.fill:SetAllPoints()
+
+  -- A one pixel inner edge gives each state a distinct silhouette, so the grid
+  -- still parses at a glance when the colours are close in value.
+  cell.edge = cell:CreateTexture(nil, "OVERLAY")
+  cell.edge:SetPoint("TOPLEFT")
+  cell.edge:SetPoint("TOPRIGHT")
+  cell.edge:SetHeight(1)
 
   cell.glyph = cell:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  cell.glyph:SetPoint("CENTER")
+  cell.glyph:SetPoint("CENTER", 0, 0)
 
   cell:SetScript("OnEnter", function(self)
+    if self:GetParent().hover then
+      self:GetParent().hover:Show()
+    end
     if not self.tooltipLines or table.getn(self.tooltipLines) == 0 then return end
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    for i = 1, table.getn(self.tooltipLines) do
-      GameTooltip:AddLine(self.tooltipLines[i], 1, 1, 1, true)
+    GameTooltip:AddLine(self.tooltipLines[1], 1, 1, 1)
+    for i = 2, table.getn(self.tooltipLines) do
+      local line = self.tooltipLines[i]
+      GameTooltip:AddLine(line.text, line.r, line.g, line.b, true)
     end
     GameTooltip:Show()
   end)
-  cell:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+  cell:SetScript("OnLeave", function(self)
+    if self:GetParent().hover then self:GetParent().hover:Hide() end
+    GameTooltip:Hide()
+  end)
+
+  cell:SetScript("OnClick", function(self)
+    local row = self:GetParent()
+    if row.guid and ns.Detail then ns.Detail.show(row.guid) end
+  end)
 
   return cell
 end
 
 local function makeRow(index)
   local row = CreateFrame("Button", nil, content)
-  row:SetSize(gridWidth(), ROW_HEIGHT)
-  row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -(index - 1) * ROW_HEIGHT)
+  row:SetSize(gridWidth(), M.rowHeight)
+  row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -(index - 1) * M.rowHeight)
+
+  row.stripe = row:CreateTexture(nil, "BACKGROUND")
+  row.stripe:SetAllPoints()
+
+  row.hover = row:CreateTexture(nil, "BORDER")
+  row.hover:SetAllPoints()
+  row.hover:SetColorTexture(C.rowHover[1], C.rowHover[2], C.rowHover[3], C.rowHover[4])
+  row.hover:Hide()
 
   row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
-  row.name:SetWidth(NAME_WIDTH - 8)
+  row.name:SetPoint("LEFT", row, "LEFT", 8, 0)
+  row.name:SetWidth(M.nameWidth - 12)
   row.name:SetJustifyH("LEFT")
 
   row.ilvl = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  row.ilvl:SetPoint("LEFT", row, "LEFT", NAME_WIDTH, 0)
-  row.ilvl:SetWidth(ILVL_WIDTH - 6)
+  row.ilvl:SetPoint("LEFT", row, "LEFT", M.nameWidth, 0)
+  row.ilvl:SetWidth(M.ilvlWidth - 8)
   row.ilvl:SetJustifyH("LEFT")
 
   row.cells = {}
@@ -114,11 +113,12 @@ local function makeRow(index)
   end
 
   row.summary = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  row.summary:SetPoint("LEFT", row, "LEFT",
-                       NAME_WIDTH + ILVL_WIDTH + table.getn(SLOTS) * (CELL_SIZE + CELL_GAP) + 6, 0)
-  row.summary:SetWidth(SUMMARY_WIDTH)
+  row.summary:SetPoint("LEFT", row, "LEFT", cellX(table.getn(SLOTS) + 1) + 4, 0)
+  row.summary:SetWidth(M.summaryWidth)
   row.summary:SetJustifyH("LEFT")
 
+  row:SetScript("OnEnter", function(self) self.hover:Show() end)
+  row:SetScript("OnLeave", function(self) self.hover:Hide() end)
   row:SetScript("OnClick", function(self)
     if self.guid and ns.Detail then ns.Detail.show(self.guid) end
   end)
@@ -132,54 +132,87 @@ local function acquireRow(index)
 end
 
 local function styleCell(cell, state, stale, lines)
-  local style = STATE_STYLE[state] or STATE_STYLE.unknown
-  local alpha = stale and 0.40 or 1
-  cell.bg:SetColorTexture(style.r, style.g, style.b, alpha)
+  local style = ns.Theme.state[state] or ns.Theme.state.unknown
+  local a = stale and ns.Theme.STALE_ALPHA or 1
+
+  cell.fill:SetColorTexture(style.fill[1], style.fill[2], style.fill[3], style.fill[4] * a)
+  cell.edge:SetColorTexture(style.edge[1], style.edge[2], style.edge[3], style.edge[4] * a)
   cell.glyph:SetText(style.glyph)
-  cell.glyph:SetTextColor(style.text[1], style.text[2], style.text[3], alpha)
+  cell.glyph:SetTextColor(style.glyphColour[1], style.glyphColour[2], style.glyphColour[3], a)
   cell.tooltipLines = lines
 end
 
--- One row's worth of work. Called for a single player when their scan lands,
--- never for the whole grid.
+local SEVERITY_COLOUR = {
+  error = { 0.93, 0.31, 0.31 },
+  warn  = { 0.92, 0.70, 0.18 },
+}
+
+local function tooltipFor(slot, slotInfo, state)
+  local name = SLOT_NAMES[slot] or ("Slot " .. slot)
+
+  if not slotInfo or state == "empty" then
+    return { name, { text = "nothing equipped", r = 0.5, g = 0.5, b = 0.5 } }
+  end
+
+  local lines = { name }
+  if slotInfo.itemName then
+    lines[2] = { text = slotInfo.itemName, r = 0.62, g = 0.66, b = 0.74 }
+  end
+
+  if slotInfo.findings and table.getn(slotInfo.findings) > 0 then
+    for i = 1, table.getn(slotInfo.findings) do
+      local f = slotInfo.findings[i]
+      local c = (f.state == "unknown") and { 0.45, 0.47, 0.52 }
+                or (SEVERITY_COLOUR[f.severity] or SEVERITY_COLOUR.warn)
+      lines[table.getn(lines) + 1] = { text = f.detail, r = c[1], g = c[2], b = c[3] }
+    end
+  elseif state == "unknown" then
+    lines[table.getn(lines) + 1] =
+      { text = "not scanned yet", r = 0.45, g = 0.47, b = 0.52 }
+  end
+
+  return lines
+end
+
 function Grid.updateRow(index, entry)
   local row = acquireRow(index)
   row.guid = entry.guid
   row:Show()
 
-  local r, g, b = classColour(entry.class)
-  -- Class colour stays muted: the cells are the dominant channel and two loud
-  -- colour scales fighting each other makes the grid unreadable.
-  row.name:SetText(entry.name or "?")
-  row.name:SetTextColor(r * 0.75 + 0.25, g * 0.75 + 0.25, b * 0.75 + 0.25)
+  local stripe = (index % 2 == 1) and C.rowOdd or C.rowEven
+  row.stripe:SetColorTexture(stripe[1], stripe[2], stripe[3], stripe[4])
 
-  row.ilvl:SetText(entry.ilvl and string.format("%.1f", entry.ilvl) or "-")
+  local r, g, b = ns.Theme.mutedClassColour(entry.class)
+  row.name:SetText(entry.name or "?")
+  row.name:SetTextColor(r, g, b, entry.stale and 0.55 or 1)
+
+  if entry.ilvl then
+    row.ilvl:SetText(string.format("%.1f", entry.ilvl))
+    ns.Theme.setText(row.ilvl, C.textPrimary)
+  else
+    row.ilvl:SetText("--")
+    ns.Theme.setText(row.ilvl, C.textFaint)
+  end
 
   for i = 1, table.getn(SLOTS) do
     local slot = SLOTS[i]
     local slotInfo = entry.slots and entry.slots[slot]
     local state = slotInfo and slotInfo.state or "unknown"
-    local lines = nil
-    if slotInfo and slotInfo.findings and table.getn(slotInfo.findings) > 0 then
-      lines = { SLOT_NAMES[slot] or ("Slot " .. slot) }
-      for j = 1, table.getn(slotInfo.findings) do
-        local f = slotInfo.findings[j]
-        lines[table.getn(lines) + 1] = "- " .. f.detail
-      end
-    elseif state == "unknown" then
-      lines = { SLOT_NAMES[slot] or ("Slot " .. slot), "- not scanned yet" }
-    end
-    styleCell(row.cells[i], state, entry.stale, lines)
+    styleCell(row.cells[i], state, entry.stale, tooltipFor(slot, slotInfo, state))
   end
 
   if entry.errors > 0 then
-    row.summary:SetText(string.format("|cffff4444%d|r", entry.errors))
+    row.summary:SetText(tostring(entry.errors))
+    row.summary:SetTextColor(0.93, 0.31, 0.31)
   elseif entry.warnings > 0 then
-    row.summary:SetText(string.format("|cffffcc00%d|r", entry.warnings))
+    row.summary:SetText(tostring(entry.warnings))
+    row.summary:SetTextColor(0.92, 0.70, 0.18)
   elseif entry.unknowns > 0 then
-    row.summary:SetText(string.format("|cff888888%d?|r", entry.unknowns))
+    row.summary:SetText(tostring(entry.unknowns) .. "?")
+    row.summary:SetTextColor(0.40, 0.42, 0.48)
   else
-    row.summary:SetText("|cff44cc44ok|r")
+    row.summary:SetText("\226\156\147")
+    row.summary:SetTextColor(0.36, 0.74, 0.46)
   end
 end
 
@@ -195,6 +228,7 @@ end
 
 function Grid.refresh(entries, coverage)
   if not frame then return end
+  lastEntries, lastCoverage = entries, coverage
 
   if sortMode == "issues" then
     table.sort(entries, comparator)
@@ -209,38 +243,78 @@ function Grid.refresh(entries, coverage)
     rows[i]:Hide()
   end
 
-  content:SetHeight(math.max(1, table.getn(entries) * ROW_HEIGHT))
+  content:SetHeight(math.max(1, table.getn(entries) * M.rowHeight))
 
-  -- Size the window to the actual roster rather than to a fixed thirty rows,
-  -- capped so a full raid still fits on screen.
-  local visibleRows = math.min(math.max(table.getn(entries), 4), 30)
-  frame:SetHeight(HEADER_HEIGHT + visibleRows * ROW_HEIGHT + 24)
+  local visibleRows = math.min(math.max(table.getn(entries), 4), 25)
+  frame:SetHeight(M.headerHeight + visibleRows * M.rowHeight + M.padding * 2)
 
   -- The build-up phase is called out explicitly. Without it the first couple of
   -- minutes of a mostly-grey grid reads as a broken addon.
-  if coverage.confirmed < coverage.total and coverage.confirmed == 0 then
-    coverageText:SetText(string.format("|cffffcc00Scanning|r  %d/%d confirmed",
-                                       coverage.confirmed, coverage.total))
+  local scanning = coverage.confirmed < coverage.total
+  if scanning and coverage.confirmed == 0 then
+    coverageText:SetText("Scanning")
+    coverageText:SetTextColor(0.92, 0.70, 0.18)
   else
-    local text = string.format("%d/%d confirmed", coverage.confirmed, coverage.total)
-    -- "not answering", not "out of range". A timeout means no reply arrived; it
-    -- could be distance, or the server dropping the request because the shared
-    -- inspect budget is exhausted. Claiming a cause the addon cannot establish
-    -- is the same mistake the evidence model exists to prevent.
-    if table.getn(coverage.unreachableNames) > 0 then
-      text = text .. string.format("  |cff888888%d not answering: %s|r",
-             table.getn(coverage.unreachableNames),
-             table.concat(coverage.unreachableNames, ", "))
+    coverageText:SetText(string.format("%d / %d confirmed", coverage.confirmed, coverage.total))
+    if scanning then
+      coverageText:SetTextColor(0.92, 0.70, 0.18)
+    else
+      coverageText:SetTextColor(0.36, 0.74, 0.46)
     end
-    coverageText:SetText(text)
   end
+
+  -- "not answering", not "out of range": a timeout means no reply arrived, and
+  -- the cause may be distance or a dropped request. Claiming a cause the addon
+  -- cannot establish is the mistake the evidence model exists to prevent.
+  if table.getn(coverage.unreachableNames) > 0 then
+    subText:SetText(string.format("%d not answering: %s",
+                    table.getn(coverage.unreachableNames),
+                    table.concat(coverage.unreachableNames, ", ")))
+  else
+    subText:SetText("")
+  end
+end
+
+local function buildHeader()
+  local header = CreateFrame("Frame", nil, frame)
+  header:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -M.headerHeight + 16)
+  header:SetSize(gridWidth(), 14)
+
+  local function label(text, x, width)
+    local fs = header:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    fs:SetPoint("LEFT", header, "LEFT", x, 0)
+    fs:SetWidth(width)
+    fs:SetJustifyH("LEFT")
+    fs:SetText(text)
+    ns.Theme.setText(fs, C.textFaint)
+    return fs
+  end
+
+  label("PLAYER", 8, M.nameWidth)
+  label("ILVL", M.nameWidth, M.ilvlWidth)
+
+  for i = 1, table.getn(SLOTS) do
+    local fs = header:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    fs:SetPoint("LEFT", header, "LEFT", cellX(i), 0)
+    fs:SetWidth(M.cellSize)
+    fs:SetJustifyH("CENTER")
+    fs:SetText(SLOT_ABBREV[SLOTS[i]] or "?")
+    ns.Theme.setText(fs, C.textFaint)
+  end
+
+  local divider = frame:CreateTexture(nil, "ARTWORK")
+  divider:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -M.headerHeight + 4)
+  divider:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -M.padding, -M.headerHeight + 4)
+  divider:SetHeight(1)
+  divider:SetColorTexture(C.divider[1], C.divider[2], C.divider[3], C.divider[4])
 end
 
 function Grid.create()
   if frame then return frame end
 
-  frame = CreateFrame("Frame", "RaidInspectorGrid", UIParent, "BasicFrameTemplateWithInset")
-  frame:SetSize(gridWidth() + 20, HEADER_HEIGHT + 30 * ROW_HEIGHT + 20)
+  frame = CreateFrame("Frame", "RaidInspectorGrid", UIParent)
+  frame:SetSize(gridWidth() + M.padding * 2 + 22,
+                M.headerHeight + 20 * M.rowHeight + M.padding * 2)
   frame:SetPoint("CENTER")
   frame:SetMovable(true)
   frame:EnableMouse(true)
@@ -248,29 +322,56 @@ function Grid.create()
   frame:SetScript("OnDragStart", frame.StartMoving)
   frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
   frame:SetClampedToScreen(true)
-  frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  frame.title:SetPoint("TOP", frame, "TOP", 0, -5)
-  frame.title:SetText("Raid Inspector")
+  frame:SetFrameStrata("HIGH")
+  ns.Theme.panel(frame)
 
-  coverageText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  coverageText:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -26)
+  local titleBar = CreateFrame("Frame", nil, frame)
+  titleBar:SetPoint("TOPLEFT")
+  titleBar:SetPoint("TOPRIGHT")
+  titleBar:SetHeight(26)
+  ns.Theme.panel(titleBar, C.header)
+
+  local title = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  title:SetPoint("LEFT", titleBar, "LEFT", M.padding, 0)
+  title:SetText("Raid Inspector")
+  ns.Theme.setText(title, C.textPrimary)
+
+  local close = CreateFrame("Button", nil, titleBar, "UIPanelCloseButton")
+  close:SetPoint("RIGHT", titleBar, "RIGHT", -2, 0)
+  close:SetSize(24, 24)
+
+  sortButton = CreateFrame("Button", nil, titleBar)
+  sortButton:SetSize(78, 16)
+  sortButton:SetPoint("RIGHT", close, "LEFT", -6, 0)
+  sortButton.text = sortButton:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  sortButton.text:SetAllPoints()
+  sortButton.text:SetJustifyH("RIGHT")
+  sortButton.text:SetText("sort: issues")
+  ns.Theme.setText(sortButton.text, C.textMuted)
+  sortButton:SetScript("OnClick", function(self)
+    sortMode = (sortMode == "issues") and "name" or "issues"
+    self.text:SetText("sort: " .. sortMode)
+    if lastEntries then Grid.refresh(lastEntries, lastCoverage) end
+  end)
+  sortButton:SetScript("OnEnter", function(self) ns.Theme.setText(self.text, C.accent) end)
+  sortButton:SetScript("OnLeave", function(self) ns.Theme.setText(self.text, C.textMuted) end)
+
+  coverageText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  coverageText:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -32)
   coverageText:SetJustifyH("LEFT")
 
-  local header = CreateFrame("Frame", nil, frame)
-  header:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -HEADER_HEIGHT + 12)
-  header:SetSize(gridWidth(), 12)
-  for i = 1, table.getn(SLOTS) do
-    local label = header:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    label:SetPoint("LEFT", header, "LEFT",
-                   NAME_WIDTH + ILVL_WIDTH + (i - 1) * (CELL_SIZE + CELL_GAP), 0)
-    label:SetWidth(CELL_SIZE)
-    label:SetJustifyH("CENTER")
-    label:SetText(SLOT_ABBREV[SLOTS[i]] or "?")
-  end
+  subText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  subText:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -46)
+  subText:SetPoint("RIGHT", frame, "RIGHT", -M.padding, 0)
+  subText:SetJustifyH("LEFT")
+  ns.Theme.setText(subText, C.textFaint)
 
-  scroll = CreateFrame("ScrollFrame", "RaidInspectorGridScroll", frame, "UIPanelScrollFrameTemplate")
-  scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -HEADER_HEIGHT)
-  scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -30, 12)
+  buildHeader()
+
+  scroll = CreateFrame("ScrollFrame", "RaidInspectorGridScroll", frame,
+                       "UIPanelScrollFrameTemplate")
+  scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -M.headerHeight)
+  scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -26, M.padding)
 
   content = CreateFrame("Frame", nil, scroll)
   content:SetSize(gridWidth(), 1)

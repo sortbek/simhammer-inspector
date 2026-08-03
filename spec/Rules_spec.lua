@@ -5,7 +5,6 @@ local MODULES = {
   "RaidInspector/Policy/Season.lua",
   "RaidInspector/Data/Enchants.lua",
   "RaidInspector/Data/Gems.lua",
-  "RaidInspector/Data/Embellishments.lua",
   "RaidInspector/Evidence.lua",
   "RaidInspector/Rules.lua",
 }
@@ -27,16 +26,10 @@ local TEST_GEMS = {
   [213470] = { quality = "gold",   tier = "legacy" },
 }
 
-local TEST_EMBELLISHMENTS = {
-  [11144] = { name = "Test embellishment A" },
-  [11145] = { name = "Test embellishment B" },
-}
-
 local function fresh()
   local ns = helper.loadModules(MODULES)
   ns.Data.Enchants = TEST_ENCHANTS
   ns.Data.Gems = TEST_GEMS
-  ns.Data.Embellishments = TEST_EMBELLISHMENTS
   return ns
 end
 
@@ -321,6 +314,7 @@ describe("Rules player-wide checks", function()
       setID       = opts.setID,
       socketCount = opts.socketCount,
       upgrade     = opts.upgrade,
+      embellished = opts.embellished,
     }
   end
 
@@ -363,29 +357,45 @@ describe("Rules player-wide checks", function()
   it("reports zero embellishments as a warning", function()
     local ns = fresh()
     local f = findingOfKind(
-      ns.Rules.evaluatePlayer({ [5] = slotEntry(ns, {}) }, CONTEXT),
+      ns.Rules.evaluatePlayer({ [5] = slotEntry(ns, { embellished = false }) }, CONTEXT),
       "embellishments_missing")
     assert.equals("warn", f.severity)
-  end)
-
-  -- Caught in a live raid: with an ungenerated stub table nobody matches, so
-  -- every single player collected a confident "0 of 2 embellishments". Missing
-  -- data must never produce a finding someone could be called out over.
-  it("reports nothing while the embellishment table is empty", function()
-    local ns = fresh()
-    ns.Data.Embellishments = {}
-    local findings = ns.Rules.evaluatePlayer({ [5] = slotEntry(ns, {}) }, CONTEXT)
-    assert.is_nil(findingOfKind(findings, "embellishments_missing"))
   end)
 
   it("reports nothing at two embellishments", function()
     local ns = fresh()
     local slots = {
-      [5]  = slotEntry(ns, { bonusIDs = { 11144 }, link = "c1" }),
-      [10] = slotEntry(ns, { bonusIDs = { 11145 }, link = "c2" }),
+      [5]  = slotEntry(ns, { embellished = true, link = "c1" }),
+      [10] = slotEntry(ns, { embellished = true, link = "c2" }),
     }
     assert.is_nil(findingOfKind(ns.Rules.evaluatePlayer(slots, CONTEXT),
                                 "embellishments_missing"))
+  end)
+
+  -- Caught in a live raid: an ungenerated stub table matched nobody, so all
+  -- twenty raiders collected a confident "0 of 2 embellishments". Counting only
+  -- the slots we could read reproduces that fault, so an unreadable slot makes
+  -- the whole count unknown.
+  it("reports nothing when any slot's embellishment status is unknown", function()
+    local ns = fresh()
+    local slots = {
+      [5]  = slotEntry(ns, { embellished = false, link = "c1" }),
+      [10] = slotEntry(ns, { embellished = nil, link = "c2" }),
+    }
+    assert.is_nil(findingOfKind(ns.Rules.evaluatePlayer(slots, CONTEXT),
+                                "embellishments_missing"))
+  end)
+
+  it("counts one embellishment as still short of the cap", function()
+    local ns = fresh()
+    local slots = {
+      [5]  = slotEntry(ns, { embellished = true, link = "c1" }),
+      [10] = slotEntry(ns, { embellished = false, link = "c2" }),
+    }
+    local f = findingOfKind(ns.Rules.evaluatePlayer(slots, CONTEXT),
+                            "embellishments_missing")
+    assert.equals("warn", f.severity)
+    assert.matches("1 of 2", f.detail)
   end)
 
   it("reports no embellishment finding when the data is invalid", function()

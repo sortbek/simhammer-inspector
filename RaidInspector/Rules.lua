@@ -161,25 +161,25 @@ local function countTierPieces(slots)
   return worn, table.getn(tierSlots)
 end
 
--- Returns nil when the embellishment table holds no data. An empty table means
--- "not generated yet", and counting against it would give every player a
--- confident "0 of 2 embellishments" -- a finding someone could be called out
--- over, produced entirely by missing data. Same guard as the tier check.
+-- Counts embellished items from what the tooltip says about each one, rather
+-- than matching bonus IDs against a generated table. The tooltip carries
+-- "Unique-Equipped: Embellished (2)" verbatim, which needs no DB2 derivation
+-- at all.
+--
+-- Returns nil when any slot's embellishment status is unknown. Counting only
+-- the slots we could read would understate the total and manufacture a
+-- "0 of 2 embellishments" finding out of missing data -- the exact fault a live
+-- raid surfaced when this was driven by a stub table.
 local function countEmbellishments(slots)
-  local known = false
-  for _ in pairs(ns.Data.Embellishments) do known = true; break end
-  if not known then return nil end
-
-  local found = 0
+  local found, seen = 0, 0
   for _, entry in pairs(slots) do
-    if entry.parsed and entry.parsed.bonusIDs then
-      for i = 1, table.getn(entry.parsed.bonusIDs) do
-        if ns.Data.Embellishments[entry.parsed.bonusIDs[i]] then
-          found = found + 1
-        end
-      end
+    if entry.parsed then
+      seen = seen + 1
+      if entry.embellished == nil then return nil end
+      if entry.embellished then found = found + 1 end
     end
   end
+  if seen == 0 then return nil end
   return found
 end
 

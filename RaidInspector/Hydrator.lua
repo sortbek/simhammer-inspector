@@ -51,6 +51,28 @@ end
 -- as incomplete, since every real item tooltip has several lines.
 local MIN_COMPLETE_TOOLTIP_LINES = 3
 
+-- Embellishments announce themselves in the tooltip: "Unique-Equipped:
+-- Embellished (2)", seen on 19 of 184 captured items. That is far simpler than
+-- chasing bonus IDs through DB2, but the word is localised, so on a client whose
+-- locale we cannot read this returns nil -- unknown -- rather than false.
+-- Absence of an English word on a German client is not evidence of absence.
+local ENGLISH_LOCALES = { enUS = true, enGB = true }
+
+local function isEmbellished(lines)
+  if not lines then return nil end
+
+  for i = 1, table.getn(lines) do
+    local line = lines[i]
+    if type(line) == "string" and string.find(line, "Embellished", 1, true) then
+      return true
+    end
+  end
+
+  local locale = GetLocale and GetLocale() or nil
+  if locale and ENGLISH_LOCALES[locale] then return false end
+  return nil
+end
+
 -- Builds the item record synchronously from whatever is already cached. Callers
 -- that need the item loaded first go through Hydrator.hydrate.
 function Hydrator.build(link)
@@ -80,6 +102,7 @@ function Hydrator.build(link)
     upgrade     = upgrade,
     setID       = setID,
     ilvl        = ilvl,
+    embellished = isEmbellished(lines),
   }
 
   local evidence = {
