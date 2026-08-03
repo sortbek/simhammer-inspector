@@ -364,6 +364,9 @@ function Grid.create()
   local close = CreateFrame("Button", nil, titleBar, "UIPanelCloseButton")
   close:SetPoint("RIGHT", titleBar, "RIGHT", -2, 0)
   close:SetSize(24, 24)
+  -- The template's default handler hides its own parent, which here is the title
+  -- bar rather than the window. Close the window explicitly.
+  close:SetScript("OnClick", function() frame:Hide() end)
 
   sortButton = CreateFrame("Button", nil, titleBar)
   sortButton:SetSize(78, 16)
@@ -401,6 +404,9 @@ function Grid.create()
   content = CreateFrame("Frame", nil, scroll)
   content:SetSize(gridWidth(), 1)
   scroll:SetScrollChild(content)
+
+  -- Escape closes it, the way every other WoW panel behaves.
+  tinsert(UISpecialFrames, "RaidInspectorGrid")
 
   frame:Hide()
   return frame
