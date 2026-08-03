@@ -12,7 +12,13 @@ local SLOTS = { 1, 2, 3, 15, 5, 9, 10, 6, 7, 8, 11, 12, 13, 14, 16, 17 }
 Scanner.config = {
   budgetRequests = 5,
   budgetWindow   = 10,
-  timeoutSeconds = 3,
+  -- Measured in a live raid: 271 ticks produced 40 requests, and 81 of those
+  -- ticks were spent waiting on one in flight. Only one inspect can be pending
+  -- at a time -- the slot is global -- so the timeout is the throughput limit
+  -- for unreachable players. A successful in-range INSPECT_READY lands well
+  -- under a second, and a false timeout only costs a retry, so 2 s buys a third
+  -- more attempts per minute at negligible risk.
+  timeoutSeconds = 2,
   tickSeconds    = 1,
 }
 

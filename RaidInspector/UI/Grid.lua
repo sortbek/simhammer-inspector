@@ -211,6 +211,11 @@ function Grid.refresh(entries, coverage)
 
   content:SetHeight(math.max(1, table.getn(entries) * ROW_HEIGHT))
 
+  -- Size the window to the actual roster rather than to a fixed thirty rows,
+  -- capped so a full raid still fits on screen.
+  local visibleRows = math.min(math.max(table.getn(entries), 4), 30)
+  frame:SetHeight(HEADER_HEIGHT + visibleRows * ROW_HEIGHT + 24)
+
   -- The build-up phase is called out explicitly. Without it the first couple of
   -- minutes of a mostly-grey grid reads as a broken addon.
   if coverage.confirmed < coverage.total and coverage.confirmed == 0 then
