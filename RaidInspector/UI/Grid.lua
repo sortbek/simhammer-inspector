@@ -30,13 +30,13 @@ local sortMode = "issues"
 local lastEntries, lastCoverage
 
 local function gridWidth()
-  return M.nameWidth + M.ilvlWidth
+  return M.nameWidth + M.ilvlWidth + M.embWidth
          + (table.getn(SLOTS) * (M.cellSize + M.cellGap))
          + M.summaryWidth
 end
 
 local function cellX(index)
-  return M.nameWidth + M.ilvlWidth + (index - 1) * (M.cellSize + M.cellGap)
+  return M.nameWidth + M.ilvlWidth + M.embWidth + (index - 1) * (M.cellSize + M.cellGap)
 end
 
 local function makeCell(parent, index)
@@ -106,6 +106,14 @@ local function makeRow(index)
   row.ilvl:SetPoint("LEFT", row, "LEFT", M.nameWidth, 0)
   row.ilvl:SetWidth(M.ilvlWidth - 8)
   row.ilvl:SetJustifyH("LEFT")
+
+  -- Embellishments get their own column rather than living inside a per-slot
+  -- cell: the cap is two across the whole character, so it is a property of the
+  -- player, and every raider is expected to be at 2 of 2.
+  row.emb = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  row.emb:SetPoint("LEFT", row, "LEFT", M.nameWidth + M.ilvlWidth, 0)
+  row.emb:SetWidth(M.embWidth - 6)
+  row.emb:SetJustifyH("LEFT")
 
   row.cells = {}
   for i = 1, table.getn(SLOTS) do
@@ -192,6 +200,22 @@ function Grid.updateRow(index, entry)
   else
     row.ilvl:SetText("--")
     ns.Theme.setText(row.ilvl, C.textFaint)
+  end
+
+  local emb = entry.embellishments
+  if not emb or emb.total == 0 then
+    row.emb:SetText("--")
+    ns.Theme.setText(row.emb, C.textFaint)
+  elseif emb.known < emb.total and emb.found < 2 then
+    -- Some slot could not be read, so the count is a floor rather than a total.
+    row.emb:SetText(emb.found .. "/2?")
+    ns.Theme.setText(row.emb, C.textFaint)
+  elseif emb.found >= 2 then
+    row.emb:SetText("2/2")
+    row.emb:SetTextColor(0.36, 0.74, 0.46)
+  else
+    row.emb:SetText(emb.found .. "/2")
+    row.emb:SetTextColor(0.92, 0.70, 0.18)
   end
 
   for i = 1, table.getn(SLOTS) do
@@ -292,6 +316,7 @@ local function buildHeader()
 
   label("PLAYER", 8, M.nameWidth)
   label("ILVL", M.nameWidth, M.ilvlWidth)
+  label("EMB", M.nameWidth + M.ilvlWidth, M.embWidth)
 
   for i = 1, table.getn(SLOTS) do
     local fs = header:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")

@@ -77,6 +77,23 @@ local function harvest(unit, guid)
       slotRecord.itemLink = link
       slotRecord.item = item
       record.slots[slot] = slotRecord
+
+      -- The harvest has to be synchronous -- GetInventoryItemLink is only valid
+      -- inside this handler -- but an item the client has not cached yet has no
+      -- tooltip, no item level and no socket count at that moment. The stored
+      -- link stays valid indefinitely, so anything incomplete is rebuilt once
+      -- the item loads. Without this, every check that needs the item cache
+      -- silently reads as "unknown" forever.
+      if not (evidence.tooltipComplete and evidence.itemLoaded and evidence.socketsKnown) then
+        ns.Hydrator.hydrate(link, function(rebuilt, rebuiltEvidence)
+          if not rebuilt then return end
+          local current = record.slots[slot]
+          if not current or current.itemLink ~= link then return end
+          ns.Evidence.record(current, link, rebuiltEvidence, serverNow())
+          current.item = rebuilt
+          Scanner.stats.rehydrated = (Scanner.stats.rehydrated or 0) + 1
+        end)
+      end
     end
   end
 

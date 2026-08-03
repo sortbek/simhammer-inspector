@@ -58,6 +58,7 @@ Theme.metrics = {
   cellGap      = 3,
   nameWidth    = 116,
   ilvlWidth    = 46,
+  embWidth     = 34,
   summaryWidth = 40,
   padding      = 12,
   headerHeight = 62,
