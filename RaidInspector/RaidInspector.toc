@@ -1,0 +1,23 @@
+## Interface: 120007
+## Title: Raid Inspector
+## Notes: Live raid gear inspection.
+## SavedVariablesPerCharacter: RaidInspectorDB
+
+Version.lua
+Data\Version.lua
+Data\Enchants.lua
+Data\Gems.lua
+Data\Embellishments.lua
+Policy\Slots.lua
+Policy\Season.lua
+LinkParser.lua
+Evidence.lua
+UpgradeTrackAdapter.lua
+DataVersion.lua
+Rules.lua
+ScanQueue.lua
+Cache.lua
+Roster.lua
+Hydrator.lua
+Scanner.lua
+Core.lua
