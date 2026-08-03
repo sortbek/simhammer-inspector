@@ -485,12 +485,29 @@ Sorted on that column by default.
 
 ## 10. Data generator
 
-`tools/generate.mjs` fetches the DB2 CSV exports from wago.tools (ItemSparse, ItemBonus,
-SpellItemEnchantment and relatives) and writes `Data/*.lua`. One command per patch. The CSV
-snapshots used are checked into `tools/csv/` so a generation run is reproducible.
+`tools/generate.mjs` fetches the DB2 CSV exports from wago.tools and writes `Data/*.lua`. One
+command per patch. The CSV snapshots used are checked into `tools/csv/` so a generation run is
+reproducible.
 
-Access verified: `https://wago.tools/db2/SpellItemEnchantment/csv?build=12.0.7.68887` returns
-543 KB of CSV, and the build number can be pinned.
+Only **two** tables are needed, established by measurement rather than assumption; the full
+investigation is in `docs/superpowers/db2-schema-findings.md`.
+
+| Output | Source table | Derivation |
+|---|---|---|
+| `Data/Enchants.lua` | `SpellItemEnchantment` (0.5 MB) | quality is a texture atlas marker inside `Name_lang`: `Quality-12-Tier1/2` → midnight-s1 silver/gold, `Quality-Tier1/2/3` → legacy, no marker → legacy with `quality = nil` |
+| `Data/Gems.lua` | `Item` where `ClassID = 3` (8.6 MB) | `CraftingQualityID`: 14 → gold, 13 → silver, both midnight-s1; 0 and 1/2/3 → legacy |
+
+`ItemSparse` is **not** required, which saves a 48 MB download and check-in. `ItemBonus` is
+only needed if the optional upgrade-track fallback table is ever built, and it is optional
+precisely because the tooltip is the primary source and survives a season rollover unmaintained.
+
+**The enchant ID ranges of the two quality generations overlap** (Midnight runs 7905–8615,
+the older marked entries 6379–7949). Anything keying off an ID range misclassifies the
+7905–7949 band. The marker shape is the only reliable discriminator.
+
+Verified end to end against real raid data: all 18 enchant IDs and all 14 gem IDs observed
+across 22 inspects resolve, including the engineering tinker on gloves (enchant 2841, no
+crafting quality, correctly `legacy` rather than absent).
 
 - `Data/Version.lua` holds the **patch version** and the build number at generation time.
 - **Degradation keys off the patch version, not the build number.** Build numbers rise almost

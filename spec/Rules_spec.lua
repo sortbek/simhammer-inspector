@@ -10,8 +10,28 @@ local MODULES = {
   "RaidInspector/Rules.lua",
 }
 
+-- The generated Data tables hold thousands of real entries. Testing the rules
+-- against them would mean testing production data instead of the cases these
+-- tests mean to cover, and every regeneration would break assertions. So the
+-- rules tests inject their own small tables after loading.
+local TEST_ENCHANTS = {
+  [7364] = { quality = "gold",   tier = "midnight-s1" },
+  [7361] = { quality = "silver", tier = "midnight-s1" },
+  [6625] = { quality = "gold",   tier = "legacy" },
+  [2841] = { quality = nil,      tier = "legacy" },
+}
+
+local TEST_GEMS = {
+  [213743] = { quality = "gold",   tier = "midnight-s1" },
+  [213740] = { quality = "silver", tier = "midnight-s1" },
+  [213470] = { quality = "gold",   tier = "legacy" },
+}
+
 local function fresh()
-  return helper.loadModules(MODULES)
+  local ns = helper.loadModules(MODULES)
+  ns.Data.Enchants = TEST_ENCHANTS
+  ns.Data.Gems = TEST_GEMS
+  return ns
 end
 
 local COMPLETE = {
