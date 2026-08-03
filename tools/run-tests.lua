@@ -1,5 +1,5 @@
--- Minimale testrunner voor Lua 5.1. Geen dependencies, bewust klein gehouden.
--- Aanroep: lua5.1.exe tools/run-tests.lua [--filter=PATROON] <specbestand>...
+-- Minimal test runner for Lua 5.1. No dependencies, deliberately small.
+-- Usage: lua5.1.exe tools/run-tests.lua [--filter=PATTERN] <specfile>...
 
 local argv = {...}
 local filter, files = nil, {}
@@ -13,9 +13,9 @@ local builtinAssert = assert
 local passed, failed, failures = 0, 0, {}
 local currentDescribe, currentBeforeEach = nil, nil
 
--- Diepe gelijkheid die het afwijkende sleutelpad teruggeeft. Dit is het enige
--- stuk van de runner dat echt goed moet zijn: bevindingenlijsten zijn geneste
--- tabellen en "ze zijn ongelijk" is dan een nutteloze foutmelding.
+-- Deep equality that reports the diverging key path. This is the one part of
+-- the runner that has to be good: findings are nested tables, and "they differ"
+-- is a useless failure message.
 local function deepEqual(a, b, path)
   path = path or "<root>"
   if type(a) ~= type(b) then
@@ -33,7 +33,7 @@ local function deepEqual(a, b, path)
   end
   for k in pairs(b) do
     if a[k] == nil then
-      return false, path .. "." .. tostring(k) .. ": ontbreekt in verwachte waarde"
+      return false, path .. "." .. tostring(k) .. ": missing from expected value"
     end
   end
   return true
@@ -45,33 +45,33 @@ local A = setmetatable({}, {
 
 function A.equals(expected, actual, msg)
   if expected ~= actual then
-    error((msg or "equals") .. ": verwacht " .. tostring(expected)
-          .. ", kreeg " .. tostring(actual), 2)
+    error((msg or "equals") .. ": expected " .. tostring(expected)
+          .. ", got " .. tostring(actual), 2)
   end
 end
 
 function A.same(expected, actual, msg)
   local ok, path = deepEqual(expected, actual)
   if not ok then
-    error((msg or "same") .. ": verschil bij " .. path, 2)
+    error((msg or "same") .. ": differs at " .. path, 2)
   end
 end
 
 function A.truthy(v, msg)
-  if not v then error((msg or "truthy") .. ": kreeg " .. tostring(v), 2) end
+  if not v then error((msg or "truthy") .. ": got " .. tostring(v), 2) end
 end
 
 function A.falsy(v, msg)
-  if v then error((msg or "falsy") .. ": kreeg " .. tostring(v), 2) end
+  if v then error((msg or "falsy") .. ": got " .. tostring(v), 2) end
 end
 
 function A.is_nil(v, msg)
-  if v ~= nil then error((msg or "is_nil") .. ": kreeg " .. tostring(v), 2) end
+  if v ~= nil then error((msg or "is_nil") .. ": got " .. tostring(v), 2) end
 end
 
 function A.matches(pattern, s, msg)
   if type(s) ~= "string" or not string.find(s, pattern) then
-    error((msg or "matches") .. ": " .. tostring(s) .. " voldoet niet aan " .. pattern, 2)
+    error((msg or "matches") .. ": " .. tostring(s) .. " does not match " .. pattern, 2)
   end
 end
 
@@ -102,12 +102,12 @@ it = function(name, fn)
   end
 end
 
--- Vanaf hier is het schrijven naar een global een fout. Per ongeluk een global
--- aanmaken is in WoW-addons een klassieke bug: je vervuilt de gedeelde
--- namespace van de hele client. Buiten de game is dat gratis te vangen.
+-- From here on, writing a global is an error. Accidentally creating a global is
+-- a classic WoW addon bug: you pollute the shared namespace of the whole
+-- client. Outside the game that is free to catch.
 setmetatable(_G, {
   __newindex = function(_, k)
-    error("verboden global aangemaakt: " .. tostring(k) .. " (gebruik local)", 2)
+    error("forbidden global created: " .. tostring(k) .. " (use local)", 2)
   end,
 })
 
@@ -115,7 +115,7 @@ for i = 1, table.getn(files) do
   local chunk, loadErr = loadfile(files[i])
   if not chunk then
     failed = failed + 1
-    failures[table.getn(failures) + 1] = { name = files[i], err = "laadfout: " .. tostring(loadErr) }
+    failures[table.getn(failures) + 1] = { name = files[i], err = "load error: " .. tostring(loadErr) }
   else
     local ok, err = xpcall(chunk, function(e) return debug.traceback(tostring(e), 2) end)
     if not ok then
@@ -127,11 +127,11 @@ end
 
 for i = 1, table.getn(failures) do
   print("")
-  print("FAAL: " .. failures[i].name)
+  print("FAIL: " .. failures[i].name)
   print(failures[i].err)
 end
 
 print("")
-print(string.format("%d geslaagd, %d gefaald", passed, failed))
+print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end
 os.exit(0)

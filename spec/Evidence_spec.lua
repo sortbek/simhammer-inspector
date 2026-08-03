@@ -14,36 +14,36 @@ local NO_TOOLTIP = {
 }
 
 describe("Evidence fingerprint", function()
-  it("geeft hetzelfde getal voor dezelfde string", function()
+  it("returns the same number for the same string", function()
     local E = evidence()
     assert.equals(E.fingerprint("item:1:2:3"), E.fingerprint("item:1:2:3"))
   end)
 
-  it("geeft verschillende getallen voor verschillende strings", function()
+  it("returns different numbers for different strings", function()
     local E = evidence()
     assert.truthy(E.fingerprint("item:1:2:3") ~= E.fingerprint("item:1:2:4"))
   end)
 
-  it("blijft onder 2^32 zodat 5.1 en 5.4 hetzelfde rekenen", function()
+  it("stays below 2^32 so 5.1 and 5.4 compute the same value", function()
     local E = evidence()
     local h = E.fingerprint(string.rep("x", 500))
     assert.truthy(h >= 0 and h < 4294967296)
   end)
 
-  it("geeft nil voor nil", function()
+  it("returns nil for nil", function()
     assert.is_nil(evidence().fingerprint(nil))
   end)
 end)
 
-describe("Evidence bevestiging", function()
-  it("bevestigt niets na één uitlezing", function()
+describe("Evidence confirmation", function()
+  it("confirms nothing after a single read", function()
     local E = evidence()
     local rec = E.newSlotRecord()
     E.record(rec, "item:1", COMPLETE, 100)
     assert.falsy(E.isConfirmed(rec, { "linkComplete" }, 10))
   end)
 
-  it("bevestigt na twee complete uitlezingen ver genoeg uit elkaar", function()
+  it("confirms after two complete reads far enough apart", function()
     local E = evidence()
     local rec = E.newSlotRecord()
     E.record(rec, "item:1", COMPLETE, 100)
@@ -51,7 +51,7 @@ describe("Evidence bevestiging", function()
     assert.truthy(E.isConfirmed(rec, { "linkComplete" }, 10))
   end)
 
-  it("bevestigt niet als de twee uitlezingen te snel op elkaar volgen", function()
+  it("does not confirm when the two reads follow too quickly", function()
     local E = evidence()
     local rec = E.newSlotRecord()
     E.record(rec, "item:1", COMPLETE, 100)
@@ -59,10 +59,10 @@ describe("Evidence bevestiging", function()
     assert.falsy(E.isConfirmed(rec, { "linkComplete" }, 10))
   end)
 
-  -- Dit is het scenario dat het hele bewijsmodel rechtvaardigt: dezelfde link,
-  -- twee keer gezien, maar de bron die de bevinding nodig heeft ontbrak beide
-  -- keren. Zonder deze regel zou hier ten onrechte rood gekleurd worden.
-  it("bevestigt een bron niet die twee keer ontbrak", function()
+  -- This is the scenario that justifies the whole evidence model: same link,
+  -- seen twice, but the source the finding needs was missing both times.
+  -- Without this rule the grid would turn red on data that never existed.
+  it("does not confirm a source that was missing twice", function()
     local E = evidence()
     local rec = E.newSlotRecord()
     E.record(rec, "item:1", NO_TOOLTIP, 100)
@@ -71,7 +71,7 @@ describe("Evidence bevestiging", function()
     assert.falsy(E.isConfirmed(rec, { "tooltipComplete" }, 10))
   end)
 
-  it("eist dat elke gevraagde bron bevestigd is", function()
+  it("requires every requested source to be confirmed", function()
     local E = evidence()
     local rec = E.newSlotRecord()
     E.record(rec, "item:1", NO_TOOLTIP, 100)
@@ -79,7 +79,7 @@ describe("Evidence bevestiging", function()
     assert.falsy(E.isConfirmed(rec, { "linkComplete", "tooltipComplete" }, 10))
   end)
 
-  it("zet alle tellers terug als de fingerprint verandert", function()
+  it("resets every counter when the fingerprint changes", function()
     local E = evidence()
     local rec = E.newSlotRecord()
     E.record(rec, "item:1", COMPLETE, 100)

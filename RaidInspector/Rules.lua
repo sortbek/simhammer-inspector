@@ -10,9 +10,9 @@ local function add(findings, slot, kind, severity, state, detail)
   }
 end
 
--- Negatieve bevindingen mogen pas "bad" worden als het bewijs er is; tot die
--- tijd zijn ze "unknown". Dit is de kern van sectie 6 van de spec: een rood
--- vakje op grond van data die nog niet binnen was, is erger dan geen data.
+-- Negative findings may only become "bad" once the evidence is in; until then
+-- they are "unknown". This is the heart of section 6 of the spec: a red cell
+-- based on data that had not arrived yet is worse than no data at all.
 local function stateFor(slotRecord, sources, context)
   if ns.Evidence.isConfirmed(slotRecord, sources, context.minInterval) then
     return "bad"
@@ -26,7 +26,7 @@ local function checkEnchant(findings, slot, parsed, slotRecord, context)
   if parsed.enchantID == 0 then
     add(findings, slot, "missing_enchant", "error",
         stateFor(slotRecord, { "linkComplete" }, context),
-        "geen enchant op een enchantbaar slot")
+        "no enchant on an enchantable slot")
     return
   end
 
@@ -38,11 +38,11 @@ local function checkEnchant(findings, slot, parsed, slotRecord, context)
   if info.tier ~= ns.Policy.Season.CURRENT_TIER then
     add(findings, slot, "outdated_enchant", "warn",
         stateFor(slotRecord, { "linkComplete" }, context),
-        "enchant uit " .. info.tier)
+        "enchant from " .. info.tier)
   elseif info.quality ~= "gold" then
     add(findings, slot, "low_enchant", "warn",
         stateFor(slotRecord, { "linkComplete" }, context),
-        "enchant is " .. info.quality .. " in plaats van gold")
+        "enchant is " .. info.quality .. " instead of gold")
   end
 end
 
@@ -57,11 +57,11 @@ local function checkGems(findings, slot, parsed, slotRecord, context)
         if info.tier ~= ns.Policy.Season.CURRENT_TIER then
           add(findings, slot, "outdated_gem", "warn",
               stateFor(slotRecord, { "linkComplete" }, context),
-              "gem uit " .. info.tier)
+              "gem from " .. info.tier)
         elseif info.quality ~= "gold" then
           add(findings, slot, "low_gem", "warn",
               stateFor(slotRecord, { "linkComplete" }, context),
-              "gem is " .. info.quality .. " in plaats van gold")
+              "gem is " .. info.quality .. " instead of gold")
         end
       end
     end
@@ -72,11 +72,12 @@ function Rules.evaluateSlot(slot, parsed, slotRecord, context)
   local findings = {}
 
   if not parsed then
+    -- A two-handed weapon makes an empty off-hand correct, not a finding.
     local isEmptyOffhandWithTwoHander = (slot == 17 and context.twoHanded)
     if not isEmptyOffhandWithTwoHander then
       add(findings, slot, "missing_item", "error",
           stateFor(slotRecord, { "itemLoaded" }, context),
-          "geen item in dit slot")
+          "no item in this slot")
     end
     return findings
   end
@@ -87,9 +88,8 @@ function Rules.evaluateSlot(slot, parsed, slotRecord, context)
   return findings
 end
 
--- Tier en embellishments zijn de eerste checks die niet per slot te beoordelen
--- zijn: je kunt pas zeggen dat iemand 3 van 5 tierstukken draagt als je alle
--- vijf slots gezien hebt.
+-- Tier and embellishments are the first checks that cannot be judged per slot:
+-- you can only say someone wears 3 of 5 tier pieces once all five slots are in.
 local function countTierPieces(slots)
   local setIDs = ns.Policy.Season.TIER_SET_IDS
   local known = false
@@ -136,14 +136,14 @@ function Rules.evaluatePlayer(slots, context)
   local worn, total = countTierPieces(slots)
   if worn and worn < total then
     add(findings, nil, "tier_incomplete", "warn", "bad",
-        worn .. " van " .. total .. " tierstukken")
+        worn .. " of " .. total .. " tier pieces")
   end
 
   local embellishments = countEmbellishments(slots)
   local maxEmbellishments = ns.Policy.Season.MAX_EMBELLISHMENTS
   if embellishments < maxEmbellishments then
     add(findings, nil, "embellishments_missing", "warn", "bad",
-        embellishments .. " van " .. maxEmbellishments .. " embellishments")
+        embellishments .. " of " .. maxEmbellishments .. " embellishments")
   end
 
   return findings

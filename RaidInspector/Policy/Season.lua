@@ -4,16 +4,16 @@ ns.Policy = ns.Policy or {}
 local Season = {}
 ns.Policy.Season = Season
 
--- Welke tier als "actueel" telt. Data/Enchants.lua en Data/Gems.lua bevatten de
--- volledige historie met een tier-tag; dit bestand bepaalt wat daarvan actueel
--- is. Zo levert een bekende maar verouderde ID een waarschuwing op in plaats
--- van "onbekend", en blijft onbekend gereserveerd voor wat echt niet herkend is.
+-- Which tier counts as "current". Data/Enchants.lua and Data/Gems.lua hold the
+-- full history with a tier tag; this file decides which part of it is current.
+-- That way a known but outdated ID produces a warning instead of "unknown", and
+-- unknown stays reserved for what genuinely is not recognised.
 Season.CURRENT_TIER = "midnight-s1"
 
 Season.MAX_EMBELLISHMENTS = 2
 
--- Enige plek waar de actuele tier-setIDs staan. Bewust niet ook in Data/,
--- want twee bronnen voor hetzelfde feit lopen gegarandeerd uiteen.
--- Vul in met de setID's uit de spike; de lege tabel houdt de tier-check
--- inactief zonder foute meldingen te produceren.
+-- The only place the current tier set IDs live. Deliberately not in Data/ as
+-- well, because two sources for the same fact are guaranteed to drift apart.
+-- Fill in with the set IDs from the spike; the empty table keeps the tier check
+-- inactive rather than producing wrong findings.
 Season.TIER_SET_IDS = {}

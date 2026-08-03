@@ -5,11 +5,11 @@ ns.Evidence = Evidence
 
 Evidence.SOURCES = { "linkComplete", "socketsKnown", "tooltipComplete", "itemLoaded" }
 
--- djb2, expliciet begrensd op 2^32. De begrenzing is geen optimalisatie maar
--- een correctheidseis: WoW draait Lua 5.1 waar getallen doubles zijn met een
--- 53-bits mantisse, terwijl 5.3+ 64-bits integers gebruikt die overlopen. Door
--- onder 2^32 te blijven rekenen beide versies exact hetzelfde uit, en telt een
--- fingerprint die lokaal berekend is nog steeds in-game.
+-- djb2, explicitly bounded to 2^32. The bound is not an optimisation but a
+-- correctness requirement: WoW runs Lua 5.1 where numbers are doubles with a
+-- 53-bit mantissa, while 5.3+ uses 64-bit integers that wrap. Staying under
+-- 2^32 makes both versions compute exactly the same value, so a fingerprint
+-- computed locally still counts in game.
 function Evidence.fingerprint(link)
   if type(link) ~= "string" then return nil end
   local h = 5381

@@ -1,7 +1,7 @@
--- Laadt addon-modules precies zoals WoW dat doet: elk bestand is een chunk die
--- twee argumenten krijgt, de addonnaam en een gedeelde namespace-tabel. Door
--- dezelfde vorm te gebruiken kan een module die stiekem een WoW-global aanraakt
--- hier niet ongemerkt doorheen glippen.
+-- Loads addon modules exactly the way WoW does: every file is a chunk that
+-- receives two arguments, the addon name and a shared namespace table. Using
+-- the same shape means a module that quietly reaches for a WoW global cannot
+-- slip through unnoticed here.
 
 local helper = {}
 
@@ -14,7 +14,7 @@ function helper.loadModules(paths)
   local ns = {}
   for i = 1, table.getn(paths) do
     local full = repoRoot() .. "/" .. paths[i]
-    local chunk = assert(loadfile(full), "kon niet laden: " .. full)
+    local chunk = assert(loadfile(full), "could not load: " .. full)
     chunk("RaidInspector", ns)
   end
   return ns

@@ -8,11 +8,11 @@ local function policy()
 end
 
 describe("Policy slots", function()
-  it("controleert precies zestien slots", function()
+  it("checks exactly sixteen slots", function()
     assert.equals(16, table.getn(policy().Slots.ALL))
   end)
 
-  it("markeert helm, shoulders, chest, benen, boots en ringen als enchantbaar", function()
+  it("marks helm, shoulders, chest, legs, boots and rings as enchantable", function()
     local S = policy().Slots
     assert.truthy(S.isEnchantable(1))
     assert.truthy(S.isEnchantable(3))
@@ -23,20 +23,20 @@ describe("Policy slots", function()
     assert.truthy(S.isEnchantable(12))
   end)
 
-  it("markeert cloak en bracers niet als enchantbaar in Midnight", function()
+  it("does not mark cloak and bracers as enchantable in Midnight", function()
     local S = policy().Slots
     assert.falsy(S.isEnchantable(15))
     assert.falsy(S.isEnchantable(9))
   end)
 
-  it("eist een enchant op een off-hand wapen maar niet op een schild", function()
+  it("requires an enchant on an off-hand weapon but not on a shield", function()
     local S = policy().Slots
     assert.truthy(S.isEnchantable(17, "weapon"))
     assert.falsy(S.isEnchantable(17, "shield"))
     assert.falsy(S.isEnchantable(17, "holdable"))
   end)
 
-  it("markeert helm, bracers en riem als socket-baar", function()
+  it("marks helm, bracers and waist as socketable", function()
     local S = policy().Slots
     assert.truthy(S.isSocketable(1))
     assert.truthy(S.isSocketable(9))
@@ -44,21 +44,21 @@ describe("Policy slots", function()
     assert.falsy(S.isSocketable(5))
   end)
 
-  it("kent vijf tier-slots", function()
+  it("knows five tier slots", function()
     assert.equals(5, table.getn(policy().Slots.TIER))
   end)
 end)
 
-describe("Policy seizoen", function()
-  it("noemt de actuele tier", function()
+describe("Policy season", function()
+  it("names the current tier", function()
     assert.equals("midnight-s1", policy().Season.CURRENT_TIER)
   end)
 
-  it("staat maximaal twee embellishments toe", function()
+  it("allows at most two embellishments", function()
     assert.equals(2, policy().Season.MAX_EMBELLISHMENTS)
   end)
 
-  it("houdt de tier-setIDs op één plek", function()
+  it("keeps the tier set IDs in one place", function()
     assert.equals("table", type(policy().Season.TIER_SET_IDS))
   end)
 end)

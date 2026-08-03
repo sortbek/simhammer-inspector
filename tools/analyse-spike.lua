@@ -1,33 +1,34 @@
--- Eenmalig analysescript: laadt de SavedVariables van de spike en draait de
--- echte LinkParser eroverheen. Bedoeld om de aannames uit de spec te toetsen,
--- niet om onderdeel van de addon te worden.
+-- Analyses the spike's SavedVariables: runs the real LinkParser over every
+-- captured link and summarises what the data says about the assumptions in the
+-- spec. Re-run this after collecting new captures.
+--
+--   tools\lua\lua5.1.exe tools\analyse-spike.lua <path to SavedVariables>
 
 local svPath = ...
-assert(svPath, "gebruik: lua5.1.exe tools/analyse-spike.lua <pad naar SavedVariables>")
+assert(svPath, "usage: lua5.1.exe tools/analyse-spike.lua <path>")
 
 local env = {}
 local chunk = assert(loadfile(svPath))
 setfenv(chunk, env)
 chunk()
-
-local db = env.RaidInspectorSpikeDB
-assert(db, "geen RaidInspectorSpikeDB gevonden")
+local db = assert(env.RaidInspectorSpikeDB, "no RaidInspectorSpikeDB found")
 
 local ns = {}
 assert(loadfile("RaidInspector/LinkParser.lua"))("RaidInspector", ns)
 local parse = ns.LinkParser.parse
 
 local SLOTNAMES = {
-  [1]="helm", [2]="nek", [3]="shoulders", [5]="chest", [6]="riem", [7]="benen",
-  [8]="boots", [9]="bracers", [10]="handen", [11]="ring1", [12]="ring2",
-  [13]="trinket1", [14]="trinket2", [15]="cloak", [16]="mainhand", [17]="offhand",
+  [1] = "head", [2] = "neck", [3] = "shoulders", [5] = "chest", [6] = "waist",
+  [7] = "legs", [8] = "feet", [9] = "wrist", [10] = "hands", [11] = "finger1",
+  [12] = "finger2", [13] = "trinket1", [14] = "trinket2", [15] = "back",
+  [16] = "mainhand", [17] = "offhand",
 }
 
 local totalSlots, parseFailures = 0, 0
-local socketDisagree, socketSamples = 0, 0
-local enchantedSlots, upgradeLines = {}, 0
-local negativeModifiers = 0
+local socketSamples, socketDisagree = 0, 0
+local negativeModifiers, upgradeLines = 0, 0
 local maxBonusCount, maxModCount = 0, 0
+local seen, enchanted = {}, {}
 
 print("=== captures ===")
 for i = 1, table.getn(db) do
@@ -38,36 +39,36 @@ for i = 1, table.getn(db) do
 end
 
 print("")
-print("=== parser tegen echte links ===")
 for i = 1, table.getn(db) do
   for slot, data in pairs(db[i].slots) do
     totalSlots = totalSlots + 1
+    seen[slot] = (seen[slot] or 0) + 1
+
     local p = parse(data.link)
     if not p then
       parseFailures = parseFailures + 1
-      print("PARSE MISLUKT slot " .. slot .. ": " .. tostring(data.link))
+      print("PARSE FAILED slot " .. slot .. ": " .. tostring(data.link))
     else
-      if p.enchantID ~= 0 then
-        enchantedSlots[slot] = (enchantedSlots[slot] or 0) + 1
-      end
+      if p.enchantID ~= 0 then enchanted[slot] = (enchanted[slot] or 0) + 1 end
+
       local nb = table.getn(p.bonusIDs)
       if nb > maxBonusCount then maxBonusCount = nb end
+
       local nm = 0
-      for k, v in pairs(p.modifiers) do
+      for _, v in pairs(p.modifiers) do
         nm = nm + 1
         if v < 0 then negativeModifiers = negativeModifiers + 1 end
       end
       if nm > maxModCount then maxModCount = nm end
 
-      -- Socketcount: vergelijk de twee kandidaat-APIs.
       local s = data.sockets
-      if type(s.fromGetItemStats) == "number" and type(s.fromGetItemNumSockets) == "number" then
+      if type(s.fromGetItemStats) == "number"
+         and type(s.fromGetItemNumSockets) == "number" then
         socketSamples = socketSamples + 1
         if s.fromGetItemStats ~= s.fromGetItemNumSockets then
           socketDisagree = socketDisagree + 1
-          print(string.format("SOCKET-VERSCHIL slot %d: stats=%s numSockets=%s added=%s",
-                slot, tostring(s.fromGetItemStats), tostring(s.fromGetItemNumSockets),
-                tostring(s.fromGetItemNumAddedSockets)))
+          print(string.format("SOCKET MISMATCH slot %d: stats=%s numSockets=%s",
+                slot, tostring(s.fromGetItemStats), tostring(s.fromGetItemNumSockets)))
         end
       end
 
@@ -80,19 +81,19 @@ for i = 1, table.getn(db) do
   end
 end
 
-print("")
-print(string.format("slots totaal          : %d", totalSlots))
-print(string.format("parse mislukt         : %d", parseFailures))
-print(string.format("socket-vergelijkingen : %d, verschillen: %d", socketSamples, socketDisagree))
-print(string.format("negatieve modifiers   : %d", negativeModifiers))
-print(string.format("max bonus-IDs         : %d", maxBonusCount))
-print(string.format("max modifier-paren    : %d", maxModCount))
-print(string.format("items met upgradeline : %d", upgradeLines))
+print(string.format("slots total            : %d", totalSlots))
+print(string.format("parse failures         : %d", parseFailures))
+print(string.format("socket comparisons     : %d, mismatches: %d", socketSamples, socketDisagree))
+print(string.format("negative modifiers     : %d", negativeModifiers))
+print(string.format("max bonus IDs          : %d", maxBonusCount))
+print(string.format("max modifier pairs     : %d", maxModCount))
+print(string.format("items with upgrade line: %d", upgradeLines))
 
 print("")
-print("=== slots met een enchant ===")
+print("slot            seen  enchanted")
 for slot = 1, 17 do
-  if enchantedSlots[slot] then
-    print(string.format("  %-10s (%2d) : %d keer", SLOTNAMES[slot] or "?", slot, enchantedSlots[slot]))
+  if SLOTNAMES[slot] then
+    print(string.format("  %-10s (%2d) %5d %10d", SLOTNAMES[slot], slot,
+          seen[slot] or 0, enchanted[slot] or 0))
   end
 end

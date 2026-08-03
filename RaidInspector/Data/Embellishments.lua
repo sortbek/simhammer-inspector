@@ -2,8 +2,8 @@ local addonName, ns = ...
 
 ns.Data = ns.Data or {}
 
--- GEGENEREERD in deel 2 uit wago.tools. Vorm: bonusID -> { name }.
+-- GENERATED in part 3 from wago.tools. Shape: bonusID -> { name }.
 ns.Data.Embellishments = {
-  [11144] = { name = "Testembellishment A" },
-  [11145] = { name = "Testembellishment B" },
+  [11144] = { name = "Test embellishment A" },
+  [11145] = { name = "Test embellishment B" },
 }
