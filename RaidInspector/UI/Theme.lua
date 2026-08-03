@@ -53,15 +53,36 @@ Theme.state = {
 }
 
 Theme.metrics = {
-  rowHeight    = 20,
+  rowHeight    = 21,
   cellSize     = 15,
   cellGap      = 3,
-  nameWidth    = 116,
+  iconSize     = 14,
+  nameWidth    = 148,
   ilvlWidth    = 46,
   embWidth     = 34,
   summaryWidth = 40,
   padding      = 12,
-  headerHeight = 62,
+  headerHeight = 78,
+}
+
+-- Item quality colours, for item names in the detail panel. Blizzard exposes
+-- these but only after the item is cached, so the table is kept here to avoid a
+-- second async dependency for something purely decorative.
+Theme.quality = {
+  [0] = { 0.62, 0.62, 0.62 },
+  [1] = { 1.00, 1.00, 1.00 },
+  [2] = { 0.12, 1.00, 0.00 },
+  [3] = { 0.00, 0.44, 0.87 },
+  [4] = { 0.64, 0.21, 0.93 },
+  [5] = { 0.90, 0.80, 0.50 },
+  [6] = { 0.90, 0.80, 0.50 },
+  [7] = { 0.00, 0.80, 1.00 },
+}
+
+Theme.role = {
+  TANK    = { 0, 0.25, 0.25, 0.5,  label = "T" },
+  HEALER  = { 0.25, 0.5, 0, 0.25,  label = "H" },
+  DAMAGER = { 0.25, 0.5, 0.25, 0.5, label = "D" },
 }
 
 Theme.STALE_ALPHA = 0.38

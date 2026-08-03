@@ -54,15 +54,16 @@ function Roster.refresh()
       seen[guid] = true
       local _, class = UnitClass(unit)
       local name, realm = UnitName(unit)
+      local role = UnitGroupRolesAssigned and UnitGroupRolesAssigned(unit) or nil
       local info = members[guid]
-      if not info then
+      local isNew = not info
+      if isNew then
         info = { guid = guid }
         members[guid] = info
-        info.name, info.realm, info.class, info.unit = name, realm, class, unit
-        notify("added", guid, info)
-      else
-        info.name, info.realm, info.class, info.unit = name, realm, class, unit
       end
+      info.name, info.realm, info.class, info.unit = name, realm, class, unit
+      info.role = role
+      if isNew then notify("added", guid, info) end
     end
   end
 

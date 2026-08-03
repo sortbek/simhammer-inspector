@@ -24,7 +24,7 @@ local SLOT_NAMES = {
 local M = ns.Theme.metrics
 local C = ns.Theme.colour
 
-local frame, scroll, content, coverageText, subText, sortButton
+local frame, scroll, content, coverageText, subText, totalsText, sortButton
 local rows = {}
 local sortMode = "issues"
 local lastEntries, lastCoverage
@@ -97,9 +97,22 @@ local function makeRow(index)
   row.hover:SetColorTexture(C.rowHover[1], C.rowHover[2], C.rowHover[3], C.rowHover[4])
   row.hover:Hide()
 
+  -- Class and role read faster as icons than as a colour alone, and a raid
+  -- leader scanning twenty rows is looking for "which healer" as often as
+  -- "which name".
+  row.classIcon = row:CreateTexture(nil, "ARTWORK")
+  row.classIcon:SetSize(M.iconSize, M.iconSize)
+  row.classIcon:SetPoint("LEFT", row, "LEFT", 6, 0)
+  row.classIcon:SetTexture("Interface\\TargetingFrame\\UI-Classes-Circles")
+
+  row.roleIcon = row:CreateTexture(nil, "ARTWORK")
+  row.roleIcon:SetSize(M.iconSize, M.iconSize)
+  row.roleIcon:SetPoint("LEFT", row.classIcon, "RIGHT", 3, 0)
+  row.roleIcon:SetTexture("Interface\\LFGFrame\\UI-LFG-ICON-ROLES")
+
   row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  row.name:SetPoint("LEFT", row, "LEFT", 8, 0)
-  row.name:SetWidth(M.nameWidth - 12)
+  row.name:SetPoint("LEFT", row.roleIcon, "RIGHT", 5, 0)
+  row.name:SetWidth(M.nameWidth - (M.iconSize * 2) - 20)
   row.name:SetJustifyH("LEFT")
 
   row.ilvl = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -125,13 +138,58 @@ local function makeRow(index)
   row.summary:SetWidth(M.summaryWidth)
   row.summary:SetJustifyH("LEFT")
 
+  row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   row:SetScript("OnEnter", function(self) self.hover:Show() end)
   row:SetScript("OnLeave", function(self) self.hover:Hide() end)
-  row:SetScript("OnClick", function(self)
-    if self.guid and ns.Detail then ns.Detail.show(self.guid) end
+  row:SetScript("OnClick", function(self, button)
+    if not self.guid then return end
+    if button == "RightButton" then
+      Grid.composeWhisper(self.guid)
+    elseif ns.Detail then
+      ns.Detail.show(self.guid)
+    end
   end)
 
   return row
+end
+
+-- Puts the player's issues into the chat box addressed to them, without
+-- sending. Telling twenty people what to fix is the actual job; typing it out
+-- is not. Sending on a click would be a message going out on a mis-click, so
+-- the last keypress stays with the user.
+function Grid.composeWhisper(guid)
+  local entry = ns.Core and ns.Core.entryFor and ns.Core.entryFor(guid)
+  if not entry then return end
+
+  local parts = {}
+  for slot, info in pairs(entry.slots or {}) do
+    if info.findings then
+      for i = 1, table.getn(info.findings) do
+        local f = info.findings[i]
+        if f.state == "bad" then
+          parts[table.getn(parts) + 1] = (SLOT_NAMES[slot] or ("slot " .. slot))
+                                         .. ": " .. f.detail
+        end
+      end
+    end
+  end
+  for i = 1, table.getn(entry.playerFindings or {}) do
+    local f = entry.playerFindings[i]
+    if f.state == "bad" then
+      parts[table.getn(parts) + 1] = f.detail
+    end
+  end
+
+  if table.getn(parts) == 0 then
+    print("|cff33ff99RaidInspector|r " .. (entry.name or "?") .. " has nothing to fix.")
+    return
+  end
+
+  local target = entry.name
+  if entry.realm and entry.realm ~= "" then target = target .. "-" .. entry.realm end
+
+  ChatFrame_OpenChat("/w " .. target .. " gear check: " .. table.concat(parts, "; "),
+                     DEFAULT_CHAT_FRAME)
 end
 
 local function acquireRow(index)
@@ -189,6 +247,26 @@ function Grid.updateRow(index, entry)
 
   local stripe = (index % 2 == 1) and C.rowOdd or C.rowEven
   row.stripe:SetColorTexture(stripe[1], stripe[2], stripe[3], stripe[4])
+
+  local iconAlpha = entry.stale and 0.5 or 1
+
+  local coords = entry.class and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[entry.class]
+  if coords then
+    row.classIcon:SetTexCoord(coords[1], coords[2], coords[3], coords[4])
+    row.classIcon:SetAlpha(iconAlpha)
+    row.classIcon:Show()
+  else
+    row.classIcon:Hide()
+  end
+
+  local role = ns.Theme.role[entry.role or ""]
+  if role then
+    row.roleIcon:SetTexCoord(role[1], role[2], role[3], role[4])
+    row.roleIcon:SetAlpha(iconAlpha)
+    row.roleIcon:Show()
+  else
+    row.roleIcon:Hide()
+  end
 
   local r, g, b = ns.Theme.mutedClassColour(entry.class)
   row.name:SetText(entry.name or "?")
@@ -297,6 +375,40 @@ function Grid.refresh(entries, coverage)
   else
     subText:SetText("")
   end
+
+  -- An aggregate line answers the question the grid cannot: how much work is
+  -- there in total, and is it worth holding the pull for.
+  local players, errors, warnings, missingEmb = 0, 0, 0, 0
+  for i = 1, table.getn(entries) do
+    local e = entries[i]
+    errors = errors + e.errors
+    warnings = warnings + e.warnings
+    if e.errors > 0 or e.warnings > 0 then players = players + 1 end
+    if e.embellishments and e.embellishments.known == e.embellishments.total
+       and e.embellishments.total > 0 and e.embellishments.found < 2 then
+      missingEmb = missingEmb + 1
+    end
+  end
+
+  local bits = {}
+  if players > 0 then
+    bits[table.getn(bits) + 1] = string.format("|cffe0e2e8%d|r players need attention", players)
+  end
+  if errors > 0 then
+    bits[table.getn(bits) + 1] = string.format("|cffee5050%d|r errors", errors)
+  end
+  if warnings > 0 then
+    bits[table.getn(bits) + 1] = string.format("|cffeab32e%d|r warnings", warnings)
+  end
+  if missingEmb > 0 then
+    bits[table.getn(bits) + 1] = string.format("|cffeab32e%d|r short on embellishments", missingEmb)
+  end
+
+  if table.getn(bits) == 0 then
+    totalsText:SetText("|cff5cbd76everyone is clean|r")
+  else
+    totalsText:SetText(table.concat(bits, "   \194\183   "))
+  end
 end
 
 local function buildHeader()
@@ -318,13 +430,30 @@ local function buildHeader()
   label("ILVL", M.nameWidth, M.ilvlWidth)
   label("EMB", M.nameWidth + M.ilvlWidth, M.embWidth)
 
+  -- Two-letter column heads are only readable once you have learned them, so
+  -- hovering spells the slot out.
   for i = 1, table.getn(SLOTS) do
-    local fs = header:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    fs:SetPoint("LEFT", header, "LEFT", cellX(i), 0)
-    fs:SetWidth(M.cellSize)
+    local slot = SLOTS[i]
+    local hit = CreateFrame("Frame", nil, header)
+    hit:SetSize(M.cellSize, 14)
+    hit:SetPoint("LEFT", header, "LEFT", cellX(i), 0)
+
+    local fs = hit:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    fs:SetAllPoints()
     fs:SetJustifyH("CENTER")
-    fs:SetText(SLOT_ABBREV[SLOTS[i]] or "?")
+    fs:SetText(SLOT_ABBREV[slot] or "?")
     ns.Theme.setText(fs, C.textFaint)
+
+    hit:SetScript("OnEnter", function(self)
+      GameTooltip:SetOwner(self, "ANCHOR_TOP")
+      GameTooltip:AddLine(SLOT_NAMES[slot] or ("Slot " .. slot))
+      GameTooltip:Show()
+      ns.Theme.setText(fs, C.textMuted)
+    end)
+    hit:SetScript("OnLeave", function()
+      GameTooltip:Hide()
+      ns.Theme.setText(fs, C.textFaint)
+    end)
   end
 
   local divider = frame:CreateTexture(nil, "ARTWORK")
@@ -388,8 +517,13 @@ function Grid.create()
   coverageText:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -32)
   coverageText:SetJustifyH("LEFT")
 
+  totalsText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  totalsText:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -48)
+  totalsText:SetPoint("RIGHT", frame, "RIGHT", -M.padding, 0)
+  totalsText:SetJustifyH("LEFT")
+
   subText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  subText:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -46)
+  subText:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -62)
   subText:SetPoint("RIGHT", frame, "RIGHT", -M.padding, 0)
   subText:SetJustifyH("LEFT")
   ns.Theme.setText(subText, C.textFaint)

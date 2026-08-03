@@ -105,7 +105,9 @@ function Core.entryFor(guid)
   local entry = {
     guid = guid,
     name = info.name,
+    realm = info.realm,
     class = info.class,
+    role = info.role,
     slots = {},
     errors = 0, warnings = 0, unknowns = 0,
     stale = false,
@@ -146,12 +148,28 @@ function Core.entryFor(guid)
     if not slotRecord then
       entry.slots[slot] = { state = "unknown", findings = {} }
     else
-      local itemName = slotRecord.itemLink
-                       and string.match(slotRecord.itemLink, "%|h%[(.-)%]%|h") or nil
+      local link = slotRecord.itemLink
+      local itemName = link and string.match(link, "%|h%[(.-)%]%|h") or nil
+      -- Strip the inline texture escapes crafted items carry in their name, so
+      -- the detail panel shows a name rather than a name plus markup.
+      if itemName then itemName = string.gsub(itemName, "%s*|A.-|a", "") end
+
+      local icon, quality
+      if link and C_Item and C_Item.GetItemInfoInstant then
+        local _, _, _, _, iconID = C_Item.GetItemInfoInstant(link)
+        icon = iconID
+      end
+      if link and C_Item and C_Item.GetItemInfo then
+        quality = select(3, C_Item.GetItemInfo(link))
+      end
+
       entry.slots[slot] = {
         state = worstState(slotFindings),
         findings = slotFindings,
         itemName = itemName,
+        icon = icon,
+        quality = quality,
+        ilvl = slotRecord.item and slotRecord.item.ilvl or nil,
       }
       if slotRecord.item and slotRecord.item.ilvl then
         total = total + slotRecord.item.ilvl
