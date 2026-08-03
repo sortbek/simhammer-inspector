@@ -160,6 +160,21 @@ local function onLogin()
   say(string.format("loaded %s, data %s (%s)", ns.VERSION, ns.Data.Version.version, status))
 end
 
+-- Reports each prefilter component separately, so a scanner that refuses to
+-- scan can be diagnosed in one run instead of by guessing.
+local function whyDump()
+  say("prefilter components per player:")
+  for guid, info in pairs(ns.Roster.all()) do
+    local p = ns.Scanner.probe(info.unit)
+    say(string.format("  %-20s unit=%-8s exists=%-5s player=%-5s conn=%-5s vis=%-5s canInspect=%-5s inRange=%-5s checked=%s",
+        info.name or guid,
+        tostring(p.unit),
+        tostring(p.exists), tostring(p.isPlayer), tostring(p.connected),
+        tostring(p.visible), tostring(p.canInspect),
+        tostring(p.inRange), tostring(p.rangeChecked)))
+  end
+end
+
 SLASH_RAIDINSPECTOR1 = "/ri"
 SlashCmdList["RAIDINSPECTOR"] = function(msg)
   msg = string.lower(msg or "")
@@ -168,6 +183,8 @@ SlashCmdList["RAIDINSPECTOR"] = function(msg)
     say("priority pass queued")
   elseif msg == "debug" then
     debugDump()
+  elseif msg == "why" then
+    whyDump()
   else
     report()
   end

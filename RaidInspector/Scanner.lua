@@ -113,11 +113,43 @@ local function onInspectReady(guid)
   end
 end
 
+-- Each component is evaluated separately so a failing prefilter can be
+-- attributed. Collapsing them into one boolean expression made a live raid
+-- report "range=false" for twenty players with no way to tell which check said
+-- no.
+function Scanner.probe(unit)
+  local p = { unit = unit }
+  if not unit then return p end
+  p.exists = UnitExists(unit) and true or false
+  if not p.exists then return p end
+  p.isPlayer = UnitIsPlayer(unit) and true or false
+  p.connected = UnitIsConnected(unit) and true or false
+  p.visible = UnitIsVisible(unit) and true or false
+  p.sameInstance = UnitInPhase and UnitInPhase(unit) or nil
+  p.canInspect = CanInspect(unit, false) and true or false
+  local inRange, checked = UnitInRange(unit)
+  p.inRange = inRange and true or false
+  p.rangeChecked = checked and true or false
+  return p
+end
+
+-- UnitInRange is a coarse 40 yd hint and refuses to answer for units it cannot
+-- check; when it declines, fall back to letting the request through and let the
+-- INSPECT_READY timeout be the real out-of-range signal, exactly as the spec
+-- says. Treating an unanswerable hint as "out of range" stops the scanner dead.
+local function passesPrefilter(p)
+  if not p.exists or not p.isPlayer then return false end
+  if p.connected == false then return false end
+  if not p.canInspect then return false end
+  if p.rangeChecked and not p.inRange then return false end
+  return true
+end
+
 local function updateRangeHints()
   for guid, info in pairs(ns.Roster.all()) do
-    local unit = info.unit
-    local ok = unit and UnitExists(unit) and CanInspect(unit, false) and UnitInRange(unit)
-    queue:setRangeHint(guid, ok and true or false)
+    local p = Scanner.probe(info.unit)
+    info.probe = p
+    queue:setRangeHint(guid, passesPrefilter(p))
   end
 end
 
