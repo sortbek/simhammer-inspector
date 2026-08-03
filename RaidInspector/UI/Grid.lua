@@ -223,8 +223,12 @@ function Grid.refresh(entries, coverage)
                                        coverage.confirmed, coverage.total))
   else
     local text = string.format("%d/%d confirmed", coverage.confirmed, coverage.total)
+    -- "not answering", not "out of range". A timeout means no reply arrived; it
+    -- could be distance, or the server dropping the request because the shared
+    -- inspect budget is exhausted. Claiming a cause the addon cannot establish
+    -- is the same mistake the evidence model exists to prevent.
     if table.getn(coverage.unreachableNames) > 0 then
-      text = text .. string.format("  |cff888888%d out of range: %s|r",
+      text = text .. string.format("  |cff888888%d not answering: %s|r",
              table.getn(coverage.unreachableNames),
              table.concat(coverage.unreachableNames, ", "))
     end

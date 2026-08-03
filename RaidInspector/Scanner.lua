@@ -10,7 +10,13 @@ ns.Scanner = Scanner
 local SLOTS = { 1, 2, 3, 15, 5, 9, 10, 6, 7, 8, 11, 12, 13, 14, 16, 17 }
 
 Scanner.config = {
-  budgetRequests = 5,
+  -- The server allows roughly 6 requests per 10 s and that budget is shared
+  -- with every other addon that inspects. RaiderIO alone is a heavy user. Going
+  -- to the ceiling means the server silently drops our requests, which arrives
+  -- as a timeout and is indistinguishable from being out of range -- a live raid
+  -- standing shoulder to shoulder reported eight players "out of range".
+  -- Asking for less gets more answered.
+  budgetRequests = 3,
   budgetWindow   = 10,
   -- Measured in a live raid: 271 ticks produced 40 requests, and 81 of those
   -- ticks were spent waiting on one in flight. Only one inspect can be pending
@@ -206,6 +212,21 @@ end
 Scanner.stats = { ticks = 0, hintPasses = 0, exitPaused = 0, exitPending = 0,
                   exitBudget = 0, exitNoCandidate = 0, requests = 0 }
 
+-- Your own gear never needs an inspect: GetInventoryItemLink works on "player"
+-- directly and always returns everything. Queueing yourself wastes budget and,
+-- worse, can report you as unreachable while you are standing still looking at
+-- your own character.
+function Scanner.scanSelf()
+  local guid = UnitGUID("player")
+  if not guid or not queue then return end
+  local returned = harvest("player", guid)
+  queue:onSuccess(guid, returned, serverNow())
+  if allSlotsConfirmed(recordFor(guid)) then
+    queue:onConfirmed(guid, serverNow())
+  end
+  return returned
+end
+
 local function tick()
   Scanner.stats.ticks = Scanner.stats.ticks + 1
 
@@ -239,6 +260,12 @@ local function tick()
   local guid = queue:next(serverNow())
   if not guid then
     Scanner.stats.exitNoCandidate = Scanner.stats.exitNoCandidate + 1
+    return
+  end
+
+  -- Never spend an inspect on yourself; read it directly instead.
+  if guid == UnitGUID("player") then
+    Scanner.scanSelf()
     return
   end
 
@@ -279,6 +306,11 @@ function Scanner.init(q, c, r)
   end)
 
   C_Timer.NewTicker(Scanner.config.tickSeconds, tick)
+
+  -- Own gear is free and always complete, so take it immediately and keep it
+  -- refreshed rather than waiting for the queue to come round.
+  C_Timer.After(2, function() pcall(Scanner.scanSelf) end)
+  C_Timer.NewTicker(30, function() pcall(Scanner.scanSelf) end)
 end
 
 -- Priority pass for the moment just before the pull, when the raid is stacked

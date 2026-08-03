@@ -18,7 +18,10 @@ local QUEUE_CONFIG = {
   backoffBase          = 5,
   backoffCeiling       = 60,
   retryCap             = 3,
-  unreachableAfter     = 5,
+  -- Raised from 5. A timeout is weak evidence: with the inspect budget shared
+  -- across addons, a dropped request looks exactly like an absent player. Five
+  -- of them was enough to write off eight raiders who were standing next to us.
+  unreachableAfter     = 10,
   reprobeSeconds       = 60,
   reconfirmSeconds     = 600,
   substantialPassSlots = 10,
@@ -190,7 +193,7 @@ local function report()
       local info = ns.Roster.get(unreachable[i])
       names[i] = info and info.name or unreachable[i]
     end
-    say("out of range: " .. table.concat(names, ", "))
+    say("not answering: " .. table.concat(names, ", "))
   end
 
   local valid, status = dataValid()
