@@ -155,7 +155,15 @@ local function countTierPieces(slots)
   return worn, table.getn(tierSlots)
 end
 
+-- Returns nil when the embellishment table holds no data. An empty table means
+-- "not generated yet", and counting against it would give every player a
+-- confident "0 of 2 embellishments" -- a finding someone could be called out
+-- over, produced entirely by missing data. Same guard as the tier check.
 local function countEmbellishments(slots)
+  local known = false
+  for _ in pairs(ns.Data.Embellishments) do known = true; break end
+  if not known then return nil end
+
   local found = 0
   for _, entry in pairs(slots) do
     if entry.parsed and entry.parsed.bonusIDs then
@@ -189,7 +197,7 @@ function Rules.evaluatePlayer(slots, context)
 
   local embellishments = countEmbellishments(slots)
   local maxEmbellishments = ns.Policy.Season.MAX_EMBELLISHMENTS
-  if embellishments < maxEmbellishments then
+  if embellishments and embellishments < maxEmbellishments then
     add(findings, nil, "embellishments_missing", "warn", "bad",
         embellishments .. " of " .. maxEmbellishments .. " embellishments")
   end

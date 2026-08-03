@@ -52,9 +52,21 @@ These drive the entire design. Items marked *(measured)* were established by the
   away cannot be scanned.
 - **`CanInspect` does not prove range.** It means "this kind of unit may be inspected", not
   "this request will succeed".
-- **`UnitInRange` is not inspect range.** It returns 40 yd (25 yd for Evokers) and only for
-  group members. It is a coarse prefilter that structurally lets through players standing at
-  28–40 yd who cannot be inspected. See section 7 for how the queue absorbs that.
+- **`UnitInRange` cannot be used at all on 12.0** *(measured)*. It returns a **secret value**:
+  an insecure addon may hold one but may not branch on it, and evaluating it throws
+  `attempt to perform boolean test on a secret boolean value, while execution tainted by
+  '<addon>'`. This is the restriction framework 12.0 introduced, landing on exactly the API
+  that had been chosen as the range prefilter.
+
+  It was never more than a coarse 40 yd proxy for a 28 yd limit anyway, so nothing of value is
+  lost: the queue tiers are now driven by measured reachability — timeout history — rather
+  than a hint that misreported in both directions. The `INSPECT_READY` timeout is the real
+  out-of-range signal, which is what this spec said from the start.
+
+- **Any WoW API result may be secret.** Coerce through `pcall` and treat an untestable value
+  as *unknowable*, never as `false`. Reading "cannot determine" as "no" is what silently
+  stopped the first working build of the scanner: the prefilter rejected all twenty raiders
+  every tick, and BugGrabber captured the error with no display addon installed to show it.
 - **The server throttles around 6 requests per 10 seconds.** Above that budget requests are
   *silently dropped* — no `INSPECT_READY` fires. A timeout with backoff is required, not
   just a timer. The budget is shared with other addons and with the user's manual inspects.
@@ -321,9 +333,14 @@ a fixed share of the budget:
 
 | Queue | Contents | Share |
 |---|---|---|
-| A — warm | `CanInspect` true, `UnitInRange` true, no recent timeout | ≥ 70% |
+| A — warm | passes the prefilter, no recent timeout | ≥ 70% |
 | B — reconfirmation | `confirmed`, cadence expired | ~20% |
 | C — cold | recent timeout or `unreachable` | ≤ 10% |
+
+The prefilter excludes a player only on a **definite** no: the unit does not exist, is not a
+player, is disconnected, or `CanInspect` returns false. Anything unknowable lets the request
+through. `UnitInRange` is not consulted at all, because on 12.0 it returns a secret value that
+cannot be branched on.
 
 Queue C must never consume more than its share. Without that ceiling a handful of players at
 30–40 yd — who pass `UnitInRange` but fail inspect — can starve every useful scan of nearby

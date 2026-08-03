@@ -27,10 +27,16 @@ local TEST_GEMS = {
   [213470] = { quality = "gold",   tier = "legacy" },
 }
 
+local TEST_EMBELLISHMENTS = {
+  [11144] = { name = "Test embellishment A" },
+  [11145] = { name = "Test embellishment B" },
+}
+
 local function fresh()
   local ns = helper.loadModules(MODULES)
   ns.Data.Enchants = TEST_ENCHANTS
   ns.Data.Gems = TEST_GEMS
+  ns.Data.Embellishments = TEST_EMBELLISHMENTS
   return ns
 end
 
@@ -347,6 +353,16 @@ describe("Rules player-wide checks", function()
       ns.Rules.evaluatePlayer({ [5] = slotEntry(ns, {}) }, CONTEXT),
       "embellishments_missing")
     assert.equals("warn", f.severity)
+  end)
+
+  -- Caught in a live raid: with an ungenerated stub table nobody matches, so
+  -- every single player collected a confident "0 of 2 embellishments". Missing
+  -- data must never produce a finding someone could be called out over.
+  it("reports nothing while the embellishment table is empty", function()
+    local ns = fresh()
+    ns.Data.Embellishments = {}
+    local findings = ns.Rules.evaluatePlayer({ [5] = slotEntry(ns, {}) }, CONTEXT)
+    assert.is_nil(findingOfKind(findings, "embellishments_missing"))
   end)
 
   it("reports nothing at two embellishments", function()
