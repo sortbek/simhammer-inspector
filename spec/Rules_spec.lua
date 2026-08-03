@@ -5,6 +5,7 @@ local MODULES = {
   "RaidInspector/Policy/Season.lua",
   "RaidInspector/Data/Enchants.lua",
   "RaidInspector/Data/Gems.lua",
+  "RaidInspector/Data/Embellishments.lua",
   "RaidInspector/Evidence.lua",
   "RaidInspector/Rules.lua",
 }
@@ -147,5 +148,90 @@ describe("Rules leeg slot", function()
     local ctx = { minInterval = 10, dataValid = true, twoHanded = true }
     local findings = ns.Rules.evaluateSlot(17, nil, confirmedRecord(ns, "a"), ctx)
     assert.is_nil(findingOfKind(findings, "missing_item"))
+  end)
+end)
+
+describe("Rules speler-brede checks", function()
+  local function slotEntry(ns, opts)
+    local rec = ns.Evidence.newSlotRecord()
+    ns.Evidence.record(rec, opts.link or "a", COMPLETE, 100)
+    ns.Evidence.record(rec, opts.link or "a", COMPLETE, 120)
+    return {
+      parsed = opts.parsed or { itemID = 1, enchantID = 7364, gemIDs = {0,0,0,0},
+                                gemCount = 0, bonusIDs = opts.bonusIDs or {}, modifiers = {} },
+      record = rec,
+      setID  = opts.setID,
+    }
+  end
+
+  local function withTierSet(ns, count)
+    ns.Policy.Season.TIER_SET_IDS = { [4242] = true }
+    local slots = {}
+    local tierSlots = ns.Policy.Slots.TIER
+    for i = 1, table.getn(tierSlots) do
+      slots[tierSlots[i]] = slotEntry(ns, { setID = (i <= count) and 4242 or nil,
+                                            link = "tier" .. i })
+    end
+    return slots
+  end
+
+  it("meldt niets bij vijf van de vijf tierstukken", function()
+    local ns = fresh()
+    local findings = ns.Rules.evaluatePlayer(withTierSet(ns, 5), CONTEXT)
+    assert.is_nil(findingOfKind(findings, "tier_incomplete"))
+  end)
+
+  it("meldt drie van de vijf tierstukken als waarschuwing", function()
+    local ns = fresh()
+    local f = findingOfKind(
+      ns.Rules.evaluatePlayer(withTierSet(ns, 3), CONTEXT), "tier_incomplete")
+    assert.equals("warn", f.severity)
+    assert.matches("3", f.detail)
+  end)
+
+  it("meldt tier niet als de setIDs nog niet ingevuld zijn", function()
+    local ns = fresh()
+    ns.Policy.Season.TIER_SET_IDS = {}
+    local slots = {}
+    local tierSlots = ns.Policy.Slots.TIER
+    for i = 1, table.getn(tierSlots) do
+      slots[tierSlots[i]] = slotEntry(ns, { link = "x" .. i })
+    end
+    assert.is_nil(findingOfKind(ns.Rules.evaluatePlayer(slots, CONTEXT), "tier_incomplete"))
+  end)
+
+  it("meldt nul embellishments als waarschuwing", function()
+    local ns = fresh()
+    local f = findingOfKind(
+      ns.Rules.evaluatePlayer({ [5] = slotEntry(ns, {}) }, CONTEXT),
+      "embellishments_missing")
+    assert.equals("warn", f.severity)
+  end)
+
+  it("meldt niets bij twee embellishments", function()
+    local ns = fresh()
+    local slots = {
+      [5]  = slotEntry(ns, { bonusIDs = { 11144 }, link = "c1" }),
+      [10] = slotEntry(ns, { bonusIDs = { 11145 }, link = "c2" }),
+    }
+    assert.is_nil(findingOfKind(ns.Rules.evaluatePlayer(slots, CONTEXT),
+                                "embellishments_missing"))
+  end)
+
+  it("meldt geen embellishments als de data ongeldig is", function()
+    local ns = fresh()
+    local findings = ns.Rules.evaluatePlayer({ [5] = slotEntry(ns, {}) },
+                                             { minInterval = 10, dataValid = false })
+    assert.is_nil(findingOfKind(findings, "embellishments_missing"))
+  end)
+
+  it("bundelt de bevindingen per slot in het spelerresultaat", function()
+    local ns = fresh()
+    local slots = {
+      [1] = slotEntry(ns, { parsed = { itemID = 1, enchantID = 0, gemIDs = {0,0,0,0},
+                                       gemCount = 0, bonusIDs = {}, modifiers = {} } }),
+    }
+    local f = findingOfKind(ns.Rules.evaluatePlayer(slots, CONTEXT), "missing_enchant")
+    assert.equals(1, f.slot)
   end)
 end)

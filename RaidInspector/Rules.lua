@@ -86,3 +86,65 @@ function Rules.evaluateSlot(slot, parsed, slotRecord, context)
 
   return findings
 end
+
+-- Tier en embellishments zijn de eerste checks die niet per slot te beoordelen
+-- zijn: je kunt pas zeggen dat iemand 3 van 5 tierstukken draagt als je alle
+-- vijf slots gezien hebt.
+local function countTierPieces(slots)
+  local setIDs = ns.Policy.Season.TIER_SET_IDS
+  local known = false
+  for _ in pairs(setIDs) do known = true; break end
+  if not known then return nil end
+
+  local tierSlots = ns.Policy.Slots.TIER
+  local worn = 0
+  for i = 1, table.getn(tierSlots) do
+    local entry = slots[tierSlots[i]]
+    if entry and entry.setID and setIDs[entry.setID] then
+      worn = worn + 1
+    end
+  end
+  return worn, table.getn(tierSlots)
+end
+
+local function countEmbellishments(slots)
+  local found = 0
+  for _, entry in pairs(slots) do
+    if entry.parsed and entry.parsed.bonusIDs then
+      for i = 1, table.getn(entry.parsed.bonusIDs) do
+        if ns.Data.Embellishments[entry.parsed.bonusIDs[i]] then
+          found = found + 1
+        end
+      end
+    end
+  end
+  return found
+end
+
+function Rules.evaluatePlayer(slots, context)
+  local findings = {}
+
+  for slot, entry in pairs(slots) do
+    local slotFindings = Rules.evaluateSlot(slot, entry.parsed, entry.record, context)
+    for i = 1, table.getn(slotFindings) do
+      findings[table.getn(findings) + 1] = slotFindings[i]
+    end
+  end
+
+  if not context.dataValid then return findings end
+
+  local worn, total = countTierPieces(slots)
+  if worn and worn < total then
+    add(findings, nil, "tier_incomplete", "warn", "bad",
+        worn .. " van " .. total .. " tierstukken")
+  end
+
+  local embellishments = countEmbellishments(slots)
+  local maxEmbellishments = ns.Policy.Season.MAX_EMBELLISHMENTS
+  if embellishments < maxEmbellishments then
+    add(findings, nil, "embellishments_missing", "warn", "bad",
+        embellishments .. " van " .. maxEmbellishments .. " embellishments")
+  end
+
+  return findings
+end
