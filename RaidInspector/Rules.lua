@@ -35,6 +35,12 @@ local function checkEnchant(findings, slot, parsed, slotRecord, context)
   local info = ns.Data.Enchants[parsed.enchantID]
   if not info then return end
 
+  -- An enchant with no crafting quality cannot be ranked. Death knight
+  -- runeforges, engineering tinkers and enchants predating the quality system
+  -- all land here, and a runeforged weapon is correctly enchanted -- calling it
+  -- outdated is a false accusation. Silence is the only honest answer.
+  if not info.quality then return end
+
   if info.tier ~= ns.Policy.Season.CURRENT_TIER then
     add(findings, slot, "outdated_enchant", "warn",
         stateFor(slotRecord, { "linkComplete" }, context),

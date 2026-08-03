@@ -134,6 +134,19 @@ describe("Rules enchants", function()
     assert.equals("bad", f.state)
   end)
 
+  -- Caught in a live raid: four players were told their weapon enchant was
+  -- outdated. Death knight runeforges, engineering tinkers and pre-quality
+  -- enchants all carry no crafting tier, and a runeforged weapon is correctly
+  -- enchanted. An enchant that cannot be ranked must not be judged.
+  it("says nothing about a known enchant that has no crafting quality", function()
+    local ns = fresh()
+    local findings = ns.Rules.evaluateSlot(16, item(parsed(2841)),
+                                           confirmedRecord(ns, "a"), CONTEXT)
+    assert.is_nil(findingOfKind(findings, "outdated_enchant"))
+    assert.is_nil(findingOfKind(findings, "low_enchant"))
+    assert.is_nil(findingOfKind(findings, "missing_enchant"))
+  end)
+
   it("marks an unrecognised enchant ID as unknown", function()
     local ns = fresh()
     local findings = ns.Rules.evaluateSlot(1, item(parsed(999999)),
