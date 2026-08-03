@@ -163,6 +163,23 @@ function Core.entryFor(guid)
   entry.playerFindings = bySlot.player or {}
   if counted > 0 then entry.ilvl = total / counted end
 
+  -- Surfaced explicitly because the embellishment check goes silent when any
+  -- slot's status is unreadable, and a silent check is indistinguishable from a
+  -- passing one. This says which of the two it is.
+  local embFound, embKnown, embTotal = 0, 0, 0
+  for i = 1, table.getn(ALL_SLOTS) do
+    local slotRecord = record.slots[ALL_SLOTS[i]]
+    if slotRecord and slotRecord.item and slotRecord.item.parsed then
+      embTotal = embTotal + 1
+      local e = slotRecord.item.embellished
+      if e ~= nil then
+        embKnown = embKnown + 1
+        if e then embFound = embFound + 1 end
+      end
+    end
+  end
+  entry.embellishments = { found = embFound, known = embKnown, total = embTotal }
+
   return entry
 end
 

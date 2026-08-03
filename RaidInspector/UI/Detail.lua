@@ -105,8 +105,20 @@ function Detail.show(guid)
   titleText:SetText(entry.name or "?")
   titleText:SetTextColor(r, g, b)
 
-  subText:SetText(string.format("item level %s%s",
+  local emb = entry.embellishments
+  local embText = "embellishments unknown"
+  if emb then
+    if emb.known < emb.total then
+      embText = string.format("embellishments %d of 2  (%d/%d slots readable)",
+                              emb.found, emb.known, emb.total)
+    else
+      embText = string.format("embellishments %d of 2", emb.found)
+    end
+  end
+
+  subText:SetText(string.format("item level %s     %s%s",
                   entry.ilvl and string.format("%.1f", entry.ilvl) or "unknown",
+                  embText,
                   entry.stale and "     stale" or ""))
 
   local n = 0
