@@ -82,6 +82,34 @@ local function checkUpgrade(findings, slot, upgrade, slotRecord, context)
   end
 end
 
+local function checkSockets(findings, slot, item, slotRecord, context)
+  local socketCount = item.socketCount
+
+  -- An unknown socket count means staying silent. You can conclude neither
+  -- "empty" nor "missing" from it.
+  if type(socketCount) ~= "number" then return end
+
+  if socketCount > 0 then
+    -- The EMPTY_SOCKET_* keys from C_Item.GetItemStats mean "there is a socket
+    -- here", not "this socket is empty" -- the spike confirmed that a bracer
+    -- with a filled Prismatic Socket still returns 1. So the empty count is the
+    -- total minus the gems present in the link.
+    local empty = socketCount - (item.parsed.gemCount or 0)
+    if empty > 0 then
+      add(findings, slot, "empty_socket", "error",
+          stateFor(slotRecord, { "linkComplete", "socketsKnown" }, context),
+          empty .. " of " .. socketCount .. " sockets empty")
+    end
+    return
+  end
+
+  if ns.Policy.Slots.isSocketable(slot) then
+    add(findings, slot, "missing_socket", "warn",
+        stateFor(slotRecord, { "socketsKnown" }, context),
+        "this slot can take a socket but has none")
+  end
+end
+
 -- The second parameter is an item record rather than a bare parse result,
 -- because three of the checks need hydrated data that is not in the item link.
 -- Passing those as separate parameters would grow the signature with every new
@@ -103,6 +131,7 @@ function Rules.evaluateSlot(slot, item, slotRecord, context)
   checkEnchant(findings, slot, item.parsed, slotRecord, context)
   checkGems(findings, slot, item.parsed, slotRecord, context)
   checkUpgrade(findings, slot, item.upgrade, slotRecord, context)
+  checkSockets(findings, slot, item, slotRecord, context)
 
   return findings
 end

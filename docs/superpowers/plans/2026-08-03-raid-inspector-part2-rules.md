@@ -670,7 +670,9 @@ end)
 powershell -ExecutionPolicy Bypass -File tools\test.ps1 -Filter "Rules sockets"
 ```
 
-Expected: eight failures.
+Expected: `4 passed, 4 failed`. Only the four tests asserting on an actual finding fail; the
+four `is_nil` assertions hold vacuously while the finding does not exist yet. That is normal
+for a not-yet-implemented check, but it means the four passes prove nothing.
 
 - [ ] **Step 3: Write the implementation**
 
