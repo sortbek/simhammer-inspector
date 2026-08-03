@@ -25,4 +25,17 @@ return {
 
   notAnItem =
     "|cff71d5ff|Hspell:12345|h[Een spreuk]|h|r",
+
+  -- Crafted item: vijf bonus-ID's, drie modifier-paren (crafting quality,
+  -- crafter-GUID-verwijzing en een gewijzigd reagent).
+  craftedEmbellished =
+    "|cffa335ee|Hitem:222817::::::::80:268::11:5:10421:9633:8902:11144:1533:3:28:2462:38:8:40:12|h[Gesmede handschoenen]|h|r",
+
+  -- Item zonder bonus-ID's maar mét modifiers.
+  noBonusWithModifiers =
+    "|cffa335ee|Hitem:219342::::::::80:268::4:0:1:28:2400|h[Testketting]|h|r",
+
+  -- Item met bonus-ID's maar zonder modifiers.
+  bonusNoModifiers =
+    "|cffa335ee|Hitem:212446::::::::80:268::11:2:10356:9888:0|h[Testschouders]|h|r",
 }

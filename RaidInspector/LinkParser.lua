@@ -35,6 +35,26 @@ function LinkParser.parse(link)
     if gemIDs[i] ~= 0 then gemCount = gemCount + 1 end
   end
 
+  local bonusIDs, modifiers = {}, {}
+
+  local bonusCount = num(f, 13)
+  for i = 1, bonusCount do
+    bonusIDs[i] = num(f, 13 + i)
+  end
+
+  -- modCount telt het aantal PAREN, niet het aantal velden. Dat verschil is de
+  -- meest gemaakte fout bij dit formaat.
+  local modCountIndex = 13 + bonusCount + 1
+  local modCount = num(f, modCountIndex)
+  for i = 1, modCount do
+    local typeIndex  = modCountIndex + (i - 1) * 2 + 1
+    local valueIndex = typeIndex + 1
+    local modType = num(f, typeIndex)
+    if modType ~= 0 then
+      modifiers[modType] = num(f, valueIndex)
+    end
+  end
+
   return {
     itemID      = num(f, 1),
     enchantID   = num(f, 2),
@@ -44,6 +64,7 @@ function LinkParser.parse(link)
     linkLevel   = num(f, 9),
     specID      = num(f, 10),
     itemContext = num(f, 12),
-    _fields     = f,
+    bonusIDs    = bonusIDs,
+    modifiers   = modifiers,
   }
 end
