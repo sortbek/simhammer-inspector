@@ -94,12 +94,23 @@ function Queue:setRangeHint(guid, inRange)
   if p then p.inRange = inRange and true or false end
 end
 
+-- Tier is a priority class; eligibility is a point in time. Keeping them apart
+-- matters: a player in backoff belongs to tier C regardless of whether their
+-- deadline has passed, and conflating the two makes next() hand out a player
+-- whose backoff is still running.
+function Queue:isEligible(guid, now)
+  local p = self.players[guid]
+  if not p then return false end
+  if not p.inRange then return false end
+  if p.nextEligibleAt and now < p.nextEligibleAt then return false end
+  return true
+end
+
 function Queue:tierOf(guid, now)
   local p = self.players[guid]
   if not p then return nil end
 
   if p.state == "unreachable" then return "C" end
-  if p.nextEligibleAt and now < p.nextEligibleAt then return "C" end
   if p.backoff > 0 then return "C" end
 
   if p.state == "confirmed" then
@@ -123,7 +134,7 @@ function Queue:next(now)
     local wanted = TIER_ORDER[i]
     local best = nil
     for guid, p in pairs(self.players) do
-      if p.inRange and self:tierOf(guid, now) == wanted then
+      if self:isEligible(guid, now) and self:tierOf(guid, now) == wanted then
         if not best or p.nextEligibleAt < self.players[best].nextEligibleAt then
           best = guid
         end
