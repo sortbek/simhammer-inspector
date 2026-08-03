@@ -264,7 +264,9 @@ local function debugDump()
       say(string.format("  %-20s %-11s tier=%-4s range=%-5s elig=%-5s wait=%-4s slots=%s",
           info.name or guid,
           tostring(d.state),
-          tostring(d.tier),
+          -- No tier means confirmed and not yet due for reconfirmation, which is
+          -- the desired resting state rather than a missing value.
+          d.tier or "done",
           tostring(d.inRange),
           tostring(d.eligible),
           tostring(d.waitSeconds),
