@@ -117,19 +117,44 @@ end
 -- attributed. Collapsing them into one boolean expression made a live raid
 -- report "range=false" for twenty players with no way to tell which check said
 -- no.
+-- Every API call is made through pcall and records its own outcome. A live raid
+-- showed 76 ticks entering this function and none leaving it, with no visible
+-- error: BugGrabber was capturing them and no display addon was installed. One
+-- unavailable or renamed API silently killed the entire scanner every second.
+-- Guessing which one wastes a raid night; measuring costs nothing.
+local function call1(results, name, fn, ...)
+  if type(fn) ~= "function" then
+    results[name] = "MISSING"
+    return nil
+  end
+  local ok, a, b = pcall(fn, ...)
+  if not ok then
+    results[name] = "ERROR: " .. tostring(a)
+    return nil
+  end
+  results[name] = a
+  return a, b
+end
+
 function Scanner.probe(unit)
-  local p = { unit = unit }
-  if not unit then return p end
-  p.exists = UnitExists(unit) and true or false
+  local p = { unit = unit, calls = {} }
+  if not unit then
+    p.calls.unit = "MISSING"
+    return p
+  end
+
+  p.exists = call1(p.calls, "UnitExists", UnitExists, unit) and true or false
   if not p.exists then return p end
-  p.isPlayer = UnitIsPlayer(unit) and true or false
-  p.connected = UnitIsConnected(unit) and true or false
-  p.visible = UnitIsVisible(unit) and true or false
-  p.sameInstance = UnitInPhase and UnitInPhase(unit) or nil
-  p.canInspect = CanInspect(unit, false) and true or false
-  local inRange, checked = UnitInRange(unit)
+
+  p.isPlayer  = call1(p.calls, "UnitIsPlayer", UnitIsPlayer, unit) and true or false
+  p.connected = call1(p.calls, "UnitIsConnected", UnitIsConnected, unit) and true or false
+  p.visible   = call1(p.calls, "UnitIsVisible", UnitIsVisible, unit) and true or false
+  p.canInspect = call1(p.calls, "CanInspect", CanInspect, unit, false) and true or false
+
+  local inRange, checked = call1(p.calls, "UnitInRange", UnitInRange, unit)
   p.inRange = inRange and true or false
   p.rangeChecked = checked and true or false
+
   return p
 end
 
@@ -184,7 +209,14 @@ local function tick()
     return
   end
 
-  updateRangeHints()
+  -- One bad unit must not take the whole scanner down for the rest of the
+  -- session. The error is recorded rather than swallowed.
+  local ok, err = pcall(updateRangeHints)
+  if not ok then
+    Scanner.stats.lastError = tostring(err)
+    Scanner.stats.errors = (Scanner.stats.errors or 0) + 1
+    return
+  end
 
   local guid = queue:next(serverNow())
   if not guid then

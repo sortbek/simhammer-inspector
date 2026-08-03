@@ -168,15 +168,38 @@ end
 -- Reports each prefilter component separately, so a scanner that refuses to
 -- scan can be diagnosed in one run instead of by guessing.
 local function whyDump()
-  say("prefilter components per player:")
+  local count = 0
+  say("prefilter components, per API call:")
+
   for guid, info in pairs(ns.Roster.all()) do
-    local p = ns.Scanner.probe(info.unit)
-    say(string.format("  %-20s unit=%-8s exists=%-5s player=%-5s conn=%-5s vis=%-5s canInspect=%-5s inRange=%-5s checked=%s",
-        info.name or guid,
-        tostring(p.unit),
-        tostring(p.exists), tostring(p.isPlayer), tostring(p.connected),
-        tostring(p.visible), tostring(p.canInspect),
-        tostring(p.inRange), tostring(p.rangeChecked)))
+    count = count + 1
+    -- Only the first few, otherwise twenty players flood the chat frame and the
+    -- interesting line scrolls away.
+    if count <= 3 then
+      local ok, p = pcall(ns.Scanner.probe, info.unit)
+      if not ok then
+        say(string.format("  %-18s probe itself threw: %s", info.name or guid, tostring(p)))
+      else
+        local parts = {}
+        for name, value in pairs(p.calls) do
+          parts[table.getn(parts) + 1] = name .. "=" .. tostring(value)
+        end
+        table.sort(parts)
+        say(string.format("  %-18s unit=%s", info.name or guid, tostring(p.unit)))
+        for i = 1, table.getn(parts) do say("      " .. parts[i]) end
+      end
+    end
+  end
+
+  if count == 0 then say("  roster is empty") end
+  say(string.format("  (%d players in roster)", count))
+
+  local s = ns.Scanner.stats
+  if s.lastError then
+    say("last scanner error: " .. s.lastError)
+    say(string.format("scanner errors: %d", s.errors or 0))
+  else
+    say("no scanner errors recorded")
   end
 end
 
