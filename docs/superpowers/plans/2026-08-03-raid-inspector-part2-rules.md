@@ -117,9 +117,15 @@ print("}")
 
 - [ ] **Step 2: Generate the fixture**
 
+Do **not** use `Set-Content -Encoding utf8` here: Windows PowerShell 5.1 writes a BOM, and
+Lua 5.1 fails to parse the file with `unexpected symbol near '<bom>'`. It also violates the
+project's UTF-8-without-BOM constraint. Write the file explicitly instead:
+
 ```powershell
 $sv = "C:\Program Files (x86)\World of Warcraft\_retail_\WTF\Account\JEFFWIENEN\SavedVariables\RaidInspectorSpike.lua"
-& "tools\lua\lua5.1.exe" "tools\extract-hydrated.lua" $sv | Set-Content -Encoding utf8 "spec\fixtures\hydrated.lua"
+$out = & "tools\lua\lua5.1.exe" "tools\extract-hydrated.lua" $sv
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText("$PWD\spec\fixtures\hydrated.lua", ($out -join "`n") + "`n", $utf8NoBom)
 & "tools\lua\lua5.1.exe" -e "local t = dofile('spec/fixtures/hydrated.lua'); print(table.getn(t) .. ' records')"
 ```
 
