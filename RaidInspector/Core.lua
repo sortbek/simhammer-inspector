@@ -71,6 +71,115 @@ local function findingsFor(guid)
   return ns.Rules.evaluatePlayer(slots, context())
 end
 
+local ALL_SLOTS = { 1, 2, 3, 15, 5, 9, 10, 6, 7, 8, 11, 12, 13, 14, 16, 17 }
+
+-- Worst state wins per slot: an error outranks a warning outranks unknown.
+local function worstState(findings)
+  local seen = nil
+  for i = 1, table.getn(findings) do
+    local f = findings[i]
+    if f.state == "bad" then
+      if f.severity == "error" then return "bad" end
+      seen = "warn"
+    elseif f.state == "unknown" and seen == nil then
+      seen = "unknown"
+    end
+  end
+  return seen or "ok"
+end
+
+-- Builds the shape the UI renders. Findings come back flat from Rules, so they
+-- are grouped by slot here rather than in the view.
+function Core.entryFor(guid)
+  local info = ns.Roster.get(guid)
+  if not info then return nil end
+
+  local record = records[guid]
+  local entry = {
+    guid = guid,
+    name = info.name,
+    class = info.class,
+    slots = {},
+    errors = 0, warnings = 0, unknowns = 0,
+    stale = false,
+  }
+
+  if not record then
+    for i = 1, table.getn(ALL_SLOTS) do
+      entry.slots[ALL_SLOTS[i]] = { state = "unknown", findings = {} }
+      entry.unknowns = entry.unknowns + 1
+    end
+    return entry
+  end
+
+  entry.stale = cache and cache:isStale(guid, time()) or false
+
+  local findings = findingsFor(guid) or {}
+  local bySlot = {}
+  for i = 1, table.getn(findings) do
+    local f = findings[i]
+    local key = f.slot or "player"
+    bySlot[key] = bySlot[key] or {}
+    bySlot[key][table.getn(bySlot[key]) + 1] = f
+
+    if f.state == "bad" then
+      if f.severity == "error" then entry.errors = entry.errors + 1
+      else entry.warnings = entry.warnings + 1 end
+    elseif f.state == "unknown" then
+      entry.unknowns = entry.unknowns + 1
+    end
+  end
+
+  local total, counted = 0, 0
+  for i = 1, table.getn(ALL_SLOTS) do
+    local slot = ALL_SLOTS[i]
+    local slotRecord = record.slots[slot]
+    local slotFindings = bySlot[slot] or {}
+
+    if not slotRecord then
+      entry.slots[slot] = { state = "unknown", findings = {} }
+    else
+      local itemName = slotRecord.itemLink
+                       and string.match(slotRecord.itemLink, "%|h%[(.-)%]%|h") or nil
+      entry.slots[slot] = {
+        state = worstState(slotFindings),
+        findings = slotFindings,
+        itemName = itemName,
+      }
+      if slotRecord.item and slotRecord.item.ilvl then
+        total = total + slotRecord.item.ilvl
+        counted = counted + 1
+      end
+    end
+  end
+
+  entry.playerFindings = bySlot.player or {}
+  if counted > 0 then entry.ilvl = total / counted end
+
+  return entry
+end
+
+function Core.entries()
+  local out = {}
+  for guid in pairs(ns.Roster.all()) do
+    local entry = Core.entryFor(guid)
+    if entry then out[table.getn(out) + 1] = entry end
+  end
+  return out
+end
+
+local function refreshGrid()
+  if not ns.Grid or not ns.Grid.isShown() then return end
+  local confirmed, total, unreachable = queue:coverage(time())
+  local names = {}
+  for i = 1, table.getn(unreachable) do
+    local info = ns.Roster.get(unreachable[i])
+    names[i] = info and info.name or unreachable[i]
+  end
+  ns.Grid.refresh(Core.entries(),
+                  { confirmed = confirmed, total = total, unreachableNames = names })
+end
+
 local function report()
   local confirmed, total, unreachable = queue:coverage(time())
   say(string.format("coverage: %d/%d confirmed", confirmed, total))
@@ -161,8 +270,17 @@ local function onLogin()
 
   ns.Scanner.init(queue, cache, records)
 
+  -- The grid refreshes on a slow timer rather than on every scan event: the row
+  -- redraw is cheap, but rebuilding twenty entries on each of five inspects per
+  -- ten seconds is work nobody asked for.
+  C_Timer.NewTicker(2, function()
+    local ok, err = pcall(refreshGrid)
+    if not ok then say("|cffff4444grid error:|r " .. tostring(err)) end
+  end)
+
   local _, status = dataValid()
   say(string.format("loaded %s, data %s (%s)", ns.VERSION, ns.Data.Version.version, status))
+  say("use |cffffff00/ri|r for the grid, |cffffff00/ri report|r for chat output")
 end
 
 -- Reports each prefilter component separately, so a scanner that refuses to
@@ -209,12 +327,16 @@ SlashCmdList["RAIDINSPECTOR"] = function(msg)
   if msg == "scan" then
     ns.Scanner.rescanAll()
     say("priority pass queued")
+    refreshGrid()
   elseif msg == "debug" then
     debugDump()
   elseif msg == "why" then
     whyDump()
-  else
+  elseif msg == "report" then
     report()
+  else
+    local shown = ns.Grid.toggle()
+    if shown then refreshGrid() end
   end
 end
 

@@ -20,4 +20,6 @@ Cache.lua
 Roster.lua
 Hydrator.lua
 Scanner.lua
+UI\Grid.lua
+UI\Detail.lua
 Core.lua
