@@ -76,6 +76,15 @@ Deze bepalen het hele ontwerp.
   gelezen worden.
 - **Gem- en socketdata kan later binnenkomen dan de itemlinks.** Eén pass per speler is
   niet altijd genoeg.
+- **Een inspect levert vaak maar een deel van de slots op.** Gemeten op 12.0.7 build 68887:
+  van acht captures gaven er slechts twee alle vijftien gevulde slots terug; de rest gaf er
+  2, 3, 6, 6, 7 en 11. `GetInventoryItemLink` gaf voor de overige slots `nil`. Het gaat dus
+  niet alleen om ontbrekende *payload* binnen een link, maar om **volledig ontbrekende
+  slots**. Zie §7 voor hoe de scanner dat opvangt.
+- **Het kleurvoorvoegsel van een itemlink is `|cnIQ4:`**, niet meer `|cffa335ee`. Matchen op
+  het kleurdeel breekt; match op `|Hitem:`.
+- **Modifier-waarden kunnen negatief zijn** (`-2147480301` komt veel voor), en achter de
+  modifiers kan een niet-numeriek veld staan: de crafter-GUID.
 - **Socketcount zit niet in de itemlink.** De link bevat alleen de aanwezige gems.
 - **`C_Item.GetItemInfo` is de genamespacete vorm**; de 16e returnwaarde is nog steeds
   `setID`. 12.0 heeft een 18e returnwaarde `itemDescription` toegevoegd.
@@ -336,10 +345,26 @@ van dichtbijstaande raidleden verhongeren.
 
 **Doorrekening.** Bij 5 requests per 10 s is de bovengrens 0,5 inspect per seconde. Eén
 ronde over 30 spelers duurt dus minimaal 60 seconden, en de twee passes die het
-vertrouwensmodel eist minimaal **twee minuten** — en dat is de ideale situatie zonder
-combatpauzes, zonder concurrerende addons en zonder timeouts. De herbevestigingscadans is
-daarna goedkoop: 30 requests per 10 minuten is 10% van het budget. De UI moet die eerste
-twee minuten expliciet als opbouwfase tonen (§9), anders lijkt de addon stuk.
+vertrouwensmodel eist minimaal twee minuten — in de ideale situatie zonder combatpauzes,
+concurrerende addons of timeouts.
+
+Die twee minuten zijn in de praktijk **te optimistisch**, want een geslaagde inspect levert
+lang niet altijd alle slots op (§3). Een speler is pas bevestigd als elk slot twee complete
+uitlezingen heeft, en een pass die 3 van de 16 slots teruggaf draagt maar aan drie slots
+bij. Reken op meerdere passes per speler voordat het raster meaningfully groen is.
+
+Daaruit volgen drie eisen aan de scanner:
+
+- **Elke pass legt vast hoeveel slots hij kreeg.** Een pass met 2 slots is nauwelijks
+  bewijs; een pass met 15 wel. Dat getal hoort bij het bewijs, niet alleen bij de logging.
+- **Een ontbrekend slot is geen leeg slot.** `GetInventoryItemLink` die `nil` teruggeeft
+  betekent "deze pass wist het niet", niet "de speler draagt hier niets". Alleen een pass
+  die substantieel compleet was mag `missing_item`-bewijs opleveren.
+- **De herbevestigingscadans geldt per slot, niet per speler.** Anders blijven slots die
+  toevallig nooit meekwamen eeuwig onbevestigd terwijl de speler als `confirmed` geldt.
+
+De herbevestiging zelf is goedkoop: 30 requests per 10 minuten is 10% van het budget. De UI
+moet de opbouwfase expliciet tonen (§9), anders lijkt de addon stuk.
 
 ### Handmatige scan
 
@@ -544,17 +569,28 @@ Buiten scope voor versie 1, maar bewust niet uitgesloten:
 
 ---
 
-## 14. Nog in-game te verifiëren
+## 14. Open punten
 
-De oorspronkelijke vijf punten zijn teruggebracht tot twee; de rest is uit documentatie
-beantwoord en in de spec verwerkt (gems zijn tweetraps, spellthread bezet het
-enchantID-veld, profession tools vallen buiten scope,
-`ITEM_UPGRADE_TOOLTIP_FORMAT_STRING` is de te gebruiken globale string).
+De spike van 2026-08-03 (12.0.7, build 68887) heeft het merendeel beantwoord; de resultaten
+staan in `docs/superpowers/spike-resultaten.md`. Beantwoord en verwerkt:
 
-1. **Schilden en held-in-off-hand.** Aangenomen wordt: off-hand *wapens* vereisen een
-   enchant, schilden en frills niet. Het schildgeval moet bevestigd worden.
-2. **Overleeft `ITEM_UPGRADE_TOOLTIP_FORMAT_STRING` 12.0 onder dezelfde naam?**
-   Met `/dump` te controleren, samen met de exacte regelvorm.
+- Gems zijn tweetraps (Silver/Gold), net als enchants.
+- Spellthread op benen bezet het gewone `enchantID`-veld.
+- Profession tools vallen buiten scope.
+- `ITEM_UPGRADE_TOOLTIP_FORMAT_STRING` bestaat en luidt `Upgrade Level: %s %d/%d`; de regel
+  verschijnt letterlijk in de tooltip van geïnspecteerde items.
+- `C_Item.GetItemStats` en `C_Item.GetItemNumSockets` gaven op 65 items hetzelfde getal;
+  de keuze tussen beide maakt niet uit.
+- Een held-in-off-hand item draagt geen enchant, zoals aangenomen.
+- Shoulders zijn wél enchantbaar in Midnight (zes recepten); het beleid klopt.
+
+Nog open:
+
+1. **Schilden.** Er zat geen schild in de steekproef. Aangenomen blijft: off-hand *wapens*
+   vereisen een enchant, schilden niet.
+2. **Hoeveel passes zijn realistisch nodig** voordat een speler volledig bevestigd is? De
+   spike laat zien dat één inspect 2 tot 15 slots kan opleveren, maar niet hoe snel dat
+   convergeert bij herhaald scannen. Te meten met het scanner-prototype uit deel 2.
 
 ---
 
