@@ -95,17 +95,19 @@ bevestigt de Midnight-wijziging waarbij cloak en bracers uit de enchantbare lijs
 De ontbrekende enchants op chest, ringen en mainhand zijn echte bevindingen — dat is precies
 wat de addon hoort te melden.
 
-### Openstaand risico: shoulders
+### Shoulders: onderzocht en bevestigd
 
-`Policy/Slots.lua` markeert shoulders als enchantbaar, op grond van gepubliceerde Midnight
-seizoen 1-bronnen. In deze steekproef zijn shoulders **twee keer gezien en nul keer
-enchanted**, terwijl helm, benen en boots 100% scoorden. Twee waarnemingen is te weinig om
-de bron te weerleggen, maar het is te veel om te negeren: als de aanname fout is, krijgt
-élke raider een valse melding "ontbrekende shoulder-enchant" — precies de valse
-beschuldiging waar §6 tegen ontworpen is.
+Shoulders zijn in deze steekproef **twee keer gezien en nul keer enchanted**, terwijl helm,
+benen en boots 100% scoorden. Dat leek een aanwijzing dat `Policy/Slots.lua` shoulders ten
+onrechte als enchantbaar markeert — een fout die élke raider een valse melding zou
+opleveren, precies de beschuldiging waar §6 tegen ontworpen is.
 
-**Actie:** meer captures verzamelen voordat deze check live gaat, of shoulders tijdelijk
-uit de enchantbare lijst halen.
+Nagezocht: shoulders **zijn** wel degelijk enchantbaar in Midnight seizoen 1. Er bestaan zes
+shoulder-enchants: Akil'zon's Swiftness, Amirdrassil's Grace, Flight Of The Eagle,
+Nature's Grace, Silvermoon's Mending en Thalassian Recovery.
+
+Het beleid blijft dus ongewijzigd, en de twee waargenomen spelers misten werkelijk een
+shoulder-enchant. Dat is een echte bevinding, geen valse.
 
 ---
 
