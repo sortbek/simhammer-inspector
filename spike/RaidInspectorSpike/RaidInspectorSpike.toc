@@ -1,0 +1,6 @@
+## Interface: 120007
+## Title: Raid Inspector Spike
+## Notes: Wegwerpaddon om aannames te verifieren. Niet distribueren.
+## SavedVariables: RaidInspectorSpikeDB
+
+Spike.lua
