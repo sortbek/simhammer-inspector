@@ -124,6 +124,11 @@ local function debugDump()
 
   if status.pausedBy then say("  paused by: " .. status.pausedBy) end
 
+  local s = ns.Scanner.stats
+  say(string.format("  ticks=%d requests=%d prefilterPasses=%d", s.ticks, s.requests, s.hintPasses))
+  say(string.format("  exits: paused=%d pending=%d budget=%d noCandidate=%d",
+      s.exitPaused, s.exitPending, s.exitBudget, s.exitNoCandidate))
+
   -- The range hint is the reason a player is skipped far more often than the
   -- tier is, so it has to be visible here. In a live raid "tier=A" for everyone
   -- said nothing about why nothing was being scanned.

@@ -146,33 +146,58 @@ local function passesPrefilter(p)
 end
 
 local function updateRangeHints()
+  local passes = 0
   for guid, info in pairs(ns.Roster.all()) do
     local p = Scanner.probe(info.unit)
     info.probe = p
-    queue:setRangeHint(guid, passesPrefilter(p))
+    local ok = passesPrefilter(p)
+    if ok then passes = passes + 1 end
+    queue:setRangeHint(guid, ok)
   end
+  Scanner.stats.hintPasses = passes
 end
 
+-- Counters, not booleans. "The tick never runs" and "the tick runs and rejects
+-- everyone" produced identical output in a live raid, because addPlayer starts
+-- players at inRange=false. Counting each exit tells them apart.
+Scanner.stats = { ticks = 0, hintPasses = 0, exitPaused = 0, exitPending = 0,
+                  exitBudget = 0, exitNoCandidate = 0, requests = 0 }
+
 local function tick()
-  if paused or inspectFrameOpen() then return end
+  Scanner.stats.ticks = Scanner.stats.ticks + 1
+
+  if paused or inspectFrameOpen() then
+    Scanner.stats.exitPaused = Scanner.stats.exitPaused + 1
+    return
+  end
 
   if pending and (now() - pending.at) > Scanner.config.timeoutSeconds then
     queue:onTimeout(pending.guid, serverNow())
     pending = nil
   end
-  if pending then return end
-  if not budgetAvailable() then return end
+  if pending then
+    Scanner.stats.exitPending = Scanner.stats.exitPending + 1
+    return
+  end
+  if not budgetAvailable() then
+    Scanner.stats.exitBudget = Scanner.stats.exitBudget + 1
+    return
+  end
 
   updateRangeHints()
 
   local guid = queue:next(serverNow())
-  if not guid then return end
+  if not guid then
+    Scanner.stats.exitNoCandidate = Scanner.stats.exitNoCandidate + 1
+    return
+  end
 
   local info = ns.Roster.get(guid)
   if not info or not info.unit then return end
 
   pending = { guid = guid, at = now() }
   requestTimes[table.getn(requestTimes) + 1] = now()
+  Scanner.stats.requests = Scanner.stats.requests + 1
   NotifyInspect(info.unit)
 end
 
