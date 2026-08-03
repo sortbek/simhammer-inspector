@@ -188,3 +188,24 @@ end
 function Scanner.isPaused()
   return paused or inspectFrameOpen()
 end
+
+function Scanner.status()
+  local pausedBy = nil
+  if paused then pausedBy = "combat or encounter" end
+  if inspectFrameOpen() then pausedBy = "Blizzard inspect window is open" end
+
+  -- Recompute the window so the reported figure matches what tick() will see.
+  local cutoff = now() - Scanner.config.budgetWindow
+  local used = 0
+  for i = 1, table.getn(requestTimes) do
+    if requestTimes[i] > cutoff then used = used + 1 end
+  end
+
+  return {
+    paused     = Scanner.isPaused(),
+    pausedBy   = pausedBy,
+    pending    = pending and pending.guid or nil,
+    budgetUsed = used,
+    budgetMax  = Scanner.config.budgetRequests,
+  }
+end

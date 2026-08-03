@@ -145,6 +145,21 @@ function Queue:next(now)
   return nil
 end
 
+-- Exposed for diagnostics. In a live raid "tier=A" told us nothing about why a
+-- player was not being scanned, because tier deliberately ignores range.
+function Queue:debugInfo(guid, now)
+  local p = self.players[guid]
+  if not p then return nil end
+  return {
+    state          = self:stateOf(guid, now),
+    tier           = self:tierOf(guid, now),
+    inRange        = p.inRange,
+    eligible       = self:isEligible(guid, now),
+    waitSeconds    = p.nextEligibleAt and math.max(0, p.nextEligibleAt - now) or 0,
+    timeoutStreak  = p.timeoutStreak,
+  }
+end
+
 function Queue:coverage(now)
   local confirmed, total, unreachable = 0, 0, {}
   for guid, p in pairs(self.players) do

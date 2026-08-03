@@ -116,14 +116,30 @@ end
 
 local function debugDump()
   local n = time()
-  say(string.format("scanner %s", ns.Scanner.isPaused() and "PAUSED" or "running"))
+  local status = ns.Scanner.status()
+  say(string.format("scanner %s | pending=%s | budget %d/%d used",
+      status.paused and "PAUSED" or "running",
+      tostring(status.pending or "-"),
+      status.budgetUsed, status.budgetMax))
+
+  if status.pausedBy then say("  paused by: " .. status.pausedBy) end
+
+  -- The range hint is the reason a player is skipped far more often than the
+  -- tier is, so it has to be visible here. In a live raid "tier=A" for everyone
+  -- said nothing about why nothing was being scanned.
   for guid, info in pairs(ns.Roster.all()) do
+    local d = queue:debugInfo(guid, n)
     local record = records[guid]
-    say(string.format("  %-20s %-12s tier=%-4s slots=%s",
-        info.name or guid,
-        tostring(queue:stateOf(guid, n)),
-        tostring(queue:tierOf(guid, n)),
-        tostring(record and record.slotsLastPass or "-")))
+    if d then
+      say(string.format("  %-20s %-11s tier=%-4s range=%-5s elig=%-5s wait=%-4s slots=%s",
+          info.name or guid,
+          tostring(d.state),
+          tostring(d.tier),
+          tostring(d.inRange),
+          tostring(d.eligible),
+          tostring(d.waitSeconds),
+          tostring(record and record.slotsLastPass or "-")))
+    end
   end
 end
 
