@@ -62,9 +62,9 @@ Theme.metrics = {
   embWidth     = 34,
   summaryWidth = 40,
   padding      = 12,
-  -- Tall enough for the totals line, the coverage line and a row of slot icons
-  -- without any of them crowding each other.
-  headerHeight = 84,
+  -- Title bar, toolbar, coverage, totals, the not-answering line and a row of
+  -- slot icons, none of them crowding each other.
+  headerHeight = 118,
 }
 
 -- Item quality colours, for item names in the detail panel. Blizzard exposes
@@ -114,6 +114,49 @@ function Theme.panel(frame, colour)
   edge("TOPRIGHT", "BOTTOMRIGHT", 1, nil)
 
   return frame
+end
+
+-- A small flat text button. Defined once so every control in the addon reacts
+-- the same way; four hand-rolled buttons drift apart within a week.
+function Theme.button(parent, label, width, onClick, tooltip)
+  local b = CreateFrame("Button", nil, parent)
+  b:SetSize(width, 18)
+
+  b.bg = b:CreateTexture(nil, "BACKGROUND")
+  b.bg:SetAllPoints()
+  b.bg:SetColorTexture(1, 1, 1, 0.05)
+
+  b.text = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  b.text:SetAllPoints()
+  b.text:SetJustifyH("CENTER")
+  b.text:SetText(label)
+  Theme.setText(b.text, Theme.colour.textMuted)
+
+  b:SetScript("OnEnter", function(self)
+    self.bg:SetColorTexture(1, 1, 1, 0.11)
+    Theme.setText(self.text, Theme.colour.textPrimary)
+    if tooltip then
+      GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+      GameTooltip:AddLine(label)
+      GameTooltip:AddLine(tooltip, 0.7, 0.7, 0.7, true)
+      GameTooltip:Show()
+    end
+  end)
+
+  b:SetScript("OnLeave", function(self)
+    self.bg:SetColorTexture(1, 1, 1, 0.05)
+    Theme.setText(self.text, Theme.colour.textMuted)
+    GameTooltip:Hide()
+  end)
+
+  b:SetScript("OnClick", function()
+    local ok, err = pcall(onClick)
+    if not ok then
+      DEFAULT_CHAT_FRAME:AddMessage("|cffff4444RaidInspector|r " .. tostring(err))
+    end
+  end)
+
+  return b
 end
 
 function Theme.setText(fontString, colour)

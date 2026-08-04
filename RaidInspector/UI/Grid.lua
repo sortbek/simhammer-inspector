@@ -544,56 +544,55 @@ function Grid.create()
   -- bar rather than the window. Close the window explicitly.
   close:SetScript("OnClick", function() frame:Hide() end)
 
-  local simcButton = CreateFrame("Button", nil, titleBar)
-  simcButton:SetSize(60, 16)
-  simcButton:SetPoint("RIGHT", close, "LEFT", -6, 0)
-  simcButton.text = simcButton:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  simcButton.text:SetAllPoints()
-  simcButton.text:SetJustifyH("RIGHT")
-  simcButton.text:SetText("simc dps")
-  ns.Theme.setText(simcButton.text, C.textMuted)
-  simcButton:SetScript("OnClick", function()
-    if ns.Core and ns.Core.exportSimc then ns.Core.exportSimc() end
-  end)
-  simcButton:SetScript("OnEnter", function(self)
-    ns.Theme.setText(self.text, C.accent)
-    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-    GameTooltip:AddLine("SimulationCraft export")
-    GameTooltip:AddLine("Every DPS in the raid, ready to paste.", 0.7, 0.7, 0.7, true)
-    GameTooltip:Show()
-  end)
-  simcButton:SetScript("OnLeave", function(self)
-    ns.Theme.setText(self.text, C.textMuted)
-    GameTooltip:Hide()
-  end)
+  -- A toolbar rather than controls squeezed into the title bar: four of them
+  -- there left no room for the title and made every one of them cryptic.
+  local toolbar = CreateFrame("Frame", nil, frame)
+  toolbar:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -30)
+  toolbar:SetSize(gridWidth(), 18)
 
-  sortButton = CreateFrame("Button", nil, titleBar)
-  sortButton:SetSize(78, 16)
-  sortButton:SetPoint("RIGHT", simcButton, "LEFT", -8, 0)
-  sortButton.text = sortButton:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  sortButton.text:SetAllPoints()
-  sortButton.text:SetJustifyH("RIGHT")
-  sortButton.text:SetText("sort: issues")
-  ns.Theme.setText(sortButton.text, C.textMuted)
-  sortButton:SetScript("OnClick", function(self)
+  local function place(button, previous)
+    if previous then
+      button:SetPoint("LEFT", previous, "RIGHT", 4, 0)
+    else
+      button:SetPoint("LEFT", toolbar, "LEFT", 0, 0)
+    end
+    return button
+  end
+
+  local rescan = place(ns.Theme.button(toolbar, "Rescan", 62, function()
+    ns.Scanner.rescanAll()
+  end, "Priority pass over everyone in range. Best used while the raid is stacked before a pull."))
+
+  local reset = place(ns.Theme.button(toolbar, "Reset", 54, function()
+    ns.Core.resetScan()
+  end, "Throw away everything collected and start over. The grid will be empty for a minute."), rescan)
+
+  local report = place(ns.Theme.button(toolbar, "Report", 60, function()
+    ns.Core.reportToChat()
+  end, "Print the findings to chat."), reset)
+
+  place(ns.Theme.button(toolbar, "SimC DPS", 72, function()
+    ns.Core.exportSimc()
+  end, "SimulationCraft profiles for every DPS, ready to paste."), report)
+
+  sortButton = ns.Theme.button(toolbar, "sort: issues", 88, function(self)
     sortMode = (sortMode == "issues") and "name" or "issues"
-    self.text:SetText("sort: " .. sortMode)
+    sortButton.text:SetText("sort: " .. sortMode)
     if lastEntries then Grid.refresh(lastEntries, lastCoverage) end
-  end)
-  sortButton:SetScript("OnEnter", function(self) ns.Theme.setText(self.text, C.accent) end)
-  sortButton:SetScript("OnLeave", function(self) ns.Theme.setText(self.text, C.textMuted) end)
+  end, "Order rows by severity, or alphabetically.")
+  sortButton:SetPoint("RIGHT", toolbar, "RIGHT", 0, 0)
 
   coverageText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  coverageText:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -32)
+  coverageText:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -54)
   coverageText:SetJustifyH("LEFT")
 
   totalsText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  totalsText:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -48)
+  totalsText:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -70)
   totalsText:SetPoint("RIGHT", frame, "RIGHT", -M.padding, 0)
   totalsText:SetJustifyH("LEFT")
 
   subText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  subText:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -62)
+  subText:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -84)
   subText:SetPoint("RIGHT", frame, "RIGHT", -M.padding, 0)
   subText:SetJustifyH("LEFT")
   ns.Theme.setText(subText, C.textFaint)

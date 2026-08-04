@@ -272,6 +272,26 @@ function Core.region()
   return map[GetCurrentRegion and GetCurrentRegion() or 0] or "US"
 end
 
+-- Throws away everything collected and starts over. Not destructive in any
+-- lasting sense -- the data is rebuilt by scanning -- but it does mean waiting
+-- for the grid to fill again, so it says so rather than silently blanking.
+function Core.resetScan()
+  for guid in pairs(records) do records[guid] = nil end
+
+  local n = time()
+  for guid in pairs(ns.Roster.all()) do
+    queue:removePlayer(guid)
+    queue:addPlayer(guid, n)
+  end
+
+  if cache then
+    for guid in pairs(ns.Roster.all()) do cache:put(guid, { guid = guid, slots = {} }, n) end
+  end
+
+  ns.Scanner.rescanAll()
+  say("cleared everything and started a fresh scan")
+end
+
 local function showBundle(players)
   table.sort(players, function(a, b) return (a.name or "") < (b.name or "") end)
   local text, skipped = ns.SimcExport.bundle(players)
@@ -363,7 +383,7 @@ local function refreshGrid()
                   { confirmed = confirmed, total = total, unreachableNames = names })
 end
 
-local function report()
+function Core.reportToChat()
   local confirmed, total, unreachable = queue:coverage(time())
   say(string.format("coverage: %d/%d confirmed", confirmed, total))
 
@@ -543,7 +563,7 @@ SlashCmdList["RAIDINSPECTOR"] = function(msg)
   elseif msg == "why" then
     whyDump()
   elseif msg == "report" then
-    report()
+    Core.reportToChat()
   elseif msg == "simc" then
     local ok, err = pcall(Core.exportSimc)
     if not ok then say("|cffff4444simc export failed:|r " .. tostring(err)) end
