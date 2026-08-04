@@ -12,7 +12,11 @@ local function create()
 
   frame = CreateFrame("Frame", "RaidInspectorExport", UIParent)
   frame:SetSize(620, 460)
-  frame:SetPoint("CENTER")
+  -- Opens over the grid rather than wherever the screen centre happens to be,
+  -- so it appears where you are already looking. Still draggable and still its
+  -- own frame, because it is transient: Ctrl+C dismisses it.
+  local anchor = (ns.Grid and ns.Grid.isShown() and ns.Grid.getFrame()) or UIParent
+  frame:SetPoint("CENTER", anchor, "CENTER", 0, 0)
   frame:SetMovable(true)
   frame:EnableMouse(true)
   frame:RegisterForDrag("LeftButton")

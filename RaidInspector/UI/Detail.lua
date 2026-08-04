@@ -51,15 +51,17 @@ end
 local function create()
   if frame then return end
 
-  frame = CreateFrame("Frame", "RaidInspectorDetail", UIParent)
-  frame:SetSize(WIDTH + 40, 420)
-  frame:SetPoint("CENTER", UIParent, "CENTER", 340, 0)
-  frame:SetMovable(true)
+  -- A child of the grid, flush against its right edge, rather than a window of
+  -- its own. Three frames each finding their own spot on screen is not an
+  -- interface; this one moves with the grid, closes with it, and leaves the
+  -- roster visible while you read one player.
+  local parent = ns.Grid.getFrame()
+
+  frame = CreateFrame("Frame", "RaidInspectorDetail", parent)
+  frame:SetWidth(WIDTH + 40)
+  frame:SetPoint("TOPLEFT", parent, "TOPRIGHT", 6, 0)
+  frame:SetPoint("BOTTOM", parent, "BOTTOM", 0, 0)
   frame:EnableMouse(true)
-  frame:RegisterForDrag("LeftButton")
-  frame:SetScript("OnDragStart", frame.StartMoving)
-  frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
-  frame:SetClampedToScreen(true)
   frame:SetFrameStrata("HIGH")
   ns.Theme.panel(frame)
 
@@ -76,9 +78,8 @@ local function create()
   local close = CreateFrame("Button", nil, titleBar, "UIPanelCloseButton")
   close:SetPoint("RIGHT", titleBar, "RIGHT", -2, 0)
   close:SetSize(24, 24)
-  -- The template's default handler hides its own parent, which here is the title
-  -- bar rather than the window. Close the window explicitly.
-  close:SetScript("OnClick", function() frame:Hide() end)
+  -- Goes through the grid so the row highlight clears with it.
+  close:SetScript("OnClick", function() ns.Grid.selectPlayer(nil) end)
 
   subText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   subText:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -32)
@@ -94,9 +95,6 @@ local function create()
   content:SetSize(WIDTH, 1)
   scroll:SetScrollChild(content)
 
-  -- Escape closes it, the way every other WoW panel behaves.
-  tinsert(UISpecialFrames, "RaidInspectorDetail")
-
   frame:Hide()
 end
 
@@ -106,6 +104,7 @@ local SEVERITY = {
 }
 
 function Detail.show(guid)
+  if not guid then Detail.hide() return end
   create()
 
   local entry = ns.Core and ns.Core.entryFor and ns.Core.entryFor(guid)

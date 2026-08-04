@@ -33,6 +33,7 @@ local frame, content, coverageText, subText, totalsText, sortButton
 local rows = {}
 local sortMode = "issues"
 local lastEntries, lastCoverage
+local selectedGuid
 
 local function gridWidth()
   return M.nameWidth + M.ilvlWidth + M.embWidth
@@ -83,7 +84,7 @@ local function makeCell(parent, index)
 
   cell:SetScript("OnClick", function(self)
     local row = self:GetParent()
-    if row.guid and ns.Detail then ns.Detail.show(row.guid) end
+    if row.guid then Grid.selectPlayer(row.guid) end
   end)
 
   return cell
@@ -158,8 +159,8 @@ local function makeRow(index)
     if not self.guid then return end
     if button == "RightButton" then
       Grid.composeWhisper(self.guid)
-    elseif ns.Detail then
-      ns.Detail.show(self.guid)
+    else
+      Grid.selectPlayer(self.guid)
     end
   end)
 
@@ -258,8 +259,14 @@ function Grid.updateRow(index, entry)
   row.guid = entry.guid
   row:Show()
 
-  local stripe = (index % 2 == 1) and C.rowOdd or C.rowEven
-  row.stripe:SetColorTexture(stripe[1], stripe[2], stripe[3], stripe[4])
+  -- The selected row keeps a visible marker, otherwise the side panel shows
+  -- someone's gear with no indication of who you clicked.
+  if entry.guid == selectedGuid then
+    row.stripe:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 0.16)
+  else
+    local stripe = (index % 2 == 1) and C.rowOdd or C.rowEven
+    row.stripe:SetColorTexture(stripe[1], stripe[2], stripe[3], stripe[4])
+  end
 
   local iconAlpha = entry.stale and 0.5 or 1
 
@@ -397,6 +404,11 @@ function Grid.refresh(entries, coverage)
     end
     coverageText:SetText(text)
   end
+
+  -- The panel reads the same live data as the grid, so it has to follow along:
+  -- a slot that gets confirmed while you are looking at it should update rather
+  -- than sit there stale until you click away and back.
+  if selectedGuid then ns.Detail.show(selectedGuid) end
 
   -- "not answering", not "out of range": a timeout means no reply arrived, and
   -- the cause may be distance or a dropped request. Claiming a cause the addon
@@ -626,10 +638,42 @@ end
 
 function Grid.toggle()
   Grid.create()
-  if frame:IsShown() then frame:Hide() else frame:Show() end
+  if frame:IsShown() then
+    frame:Hide()
+    -- The panel is a child, so it hides with the parent, but the selection has
+    -- to be cleared too or reopening lands on a highlighted row with no panel.
+    selectedGuid = nil
+    ns.Detail.hide()
+  else
+    frame:Show()
+  end
   return frame:IsShown()
 end
 
 function Grid.isShown()
   return frame and frame:IsShown()
+end
+
+-- The detail panel attaches to this rather than floating on its own, so the two
+-- move and close together instead of scattering across the screen.
+function Grid.getFrame()
+  Grid.create()
+  return frame
+end
+
+-- Clicking the selected player again closes the panel, which is what people
+-- expect from a toggle and saves hunting for a close button.
+function Grid.selectPlayer(guid)
+  if selectedGuid == guid then
+    selectedGuid = nil
+    ns.Detail.hide()
+  else
+    selectedGuid = guid
+    ns.Detail.show(guid)
+  end
+  if lastEntries then Grid.refresh(lastEntries, lastCoverage) end
+end
+
+function Grid.selectedPlayer()
+  return selectedGuid
 end
