@@ -111,6 +111,11 @@ function SimcExport.profile(player)
   if not player.class or not player.name then
     return nil, "missing class or name"
   end
+  -- An empty spec= line is as unusable to SimC as a missing talent string, and
+  -- just as easy to miss in a wall of profiles.
+  if not player.spec or player.spec == "" then
+    return nil, "no spec captured"
+  end
 
   local lines = {
     string.format("# %s - %s - %s/%s",

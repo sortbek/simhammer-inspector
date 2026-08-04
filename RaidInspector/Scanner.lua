@@ -291,9 +291,19 @@ Scanner.stats = { ticks = 0, hintPasses = 0, exitPaused = 0, exitPending = 0,
 -- directly and always returns everything. Queueing yourself wastes budget and,
 -- worse, can report you as unreachable while you are standing still looking at
 -- your own character.
--- Your own talents come from a different call than an inspected player's:
--- GenerateInspectImportString needs inspect data, which you never have for
--- yourself.
+-- Your own spec and talents both come from different calls than an inspected
+-- player's: the inspect variants need inspect data, which you never have for
+-- yourself. Missing this on the spec produced a SimC profile with an empty
+-- spec= line, which SimC will not accept.
+local function ownSpecID()
+  if not GetSpecialization or not GetSpecializationInfo then return nil end
+  local index = GetSpecialization()
+  if not index then return nil end
+  local ok, specID = pcall(GetSpecializationInfo, index)
+  if not ok then return nil end
+  return specID
+end
+
 local function ownTalents()
   if not C_Traits or not C_Traits.GenerateImportString then return nil end
   if not C_ClassTalents or not C_ClassTalents.GetActiveConfigID then return nil end
@@ -308,7 +318,9 @@ function Scanner.scanSelf()
   local guid = UnitGUID("player")
   if not guid or not queue then return end
   local returned = harvest("player", guid)
-  recordFor(guid).talents = ownTalents() or recordFor(guid).talents
+  local record = recordFor(guid)
+  record.talents = ownTalents() or record.talents
+  record.specID = ownSpecID() or record.specID
   queue:onSuccess(guid, returned, serverNow())
   if allSlotsConfirmed(recordFor(guid)) then
     queue:onConfirmed(guid, serverNow())

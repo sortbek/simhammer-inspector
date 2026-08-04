@@ -130,6 +130,17 @@ describe("SimcExport profile", function()
     assert.is_nil(text)
     assert.matches("talents", err)
   end)
+
+  -- Caught in real output: the self-scan path never set specID, because
+  -- GetInspectSpecialization returns nothing for your own character. That
+  -- produced a profile with an empty spec= line that looked complete.
+  it("refuses to build a profile without a spec", function()
+    local p = player()
+    p.spec = nil
+    local text, err = exporter().profile(p)
+    assert.is_nil(text)
+    assert.matches("spec", err)
+  end)
 end)
 
 describe("SimcExport bundle", function()
