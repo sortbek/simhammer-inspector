@@ -10,7 +10,7 @@ local frame, editBox, statusText, skippedText
 local function create()
   if frame then return end
 
-  frame = CreateFrame("Frame", "RaidInspectorExport", UIParent)
+  frame = CreateFrame("Frame", "SimhammerInspectorExport", UIParent)
   frame:SetSize(620, 460)
   -- Opens over the grid rather than wherever the screen centre happens to be,
   -- so it appears where you are already looking. Still draggable and still its
@@ -52,7 +52,7 @@ local function create()
   skippedText:SetJustifyH("LEFT")
   ns.Theme.setText(skippedText, C.textFaint)
 
-  local scroll = CreateFrame("ScrollFrame", "RaidInspectorExportScroll", frame,
+  local scroll = CreateFrame("ScrollFrame", "SimhammerInspectorExportScroll", frame,
                              "UIPanelScrollFrameTemplate")
   scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -66)
   scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -30, 12)
@@ -79,7 +79,7 @@ local function create()
   end)
   scroll:SetScrollChild(editBox)
 
-  tinsert(UISpecialFrames, "RaidInspectorExport")
+  tinsert(UISpecialFrames, "SimhammerInspectorExport")
   frame:Hide()
 end
 

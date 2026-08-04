@@ -1,4 +1,4 @@
-# Raid Inspector — Design
+# Simhammer Inspector — Design
 
 **Date:** 2026-08-03
 **Status:** Approved after review by Fable and Codex; part 1 implemented and merged
@@ -142,8 +142,8 @@ Scanner ──▶ LinkParser ──▶ Hydrator ──▶ Rules ──▶ UI
 (section 11), derived values never.
 
 ```
-RaidInspector/
-  RaidInspector.toc
+SimhammerInspector/
+  SimhammerInspector.toc
   Core.lua                 -- namespace, event dispatch, slash commands, combat gating
   Roster.lua               -- group roster: GUID, name, realm, class, spec
   Scanner.lua              -- inspect queue: budget, tiers, timeouts, contention
@@ -384,7 +384,7 @@ show the build-up phase explicitly (section 9), or the addon will look broken.
 
 ### Manual scan
 
-`/ri scan` and the button in the UI perform one priority round: flush the queue, reset all
+`/sh scan` and the button in the UI perform one priority round: flush the queue, reset all
 backoffs, place everyone who currently passes `CanInspect` and `UnitInRange` into queue A,
 and report coverage afterwards. Intended for the moment just before the pull, when the raid
 is stacked and coverage is at its best.

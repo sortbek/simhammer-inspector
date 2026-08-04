@@ -1,4 +1,4 @@
-# Raid Inspector — Implementation plan, part 4: the runtime
+# Simhammer Inspector — Implementation plan, part 4: the runtime
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -51,7 +51,7 @@ the reconfirmation cadence from being untestable in principle.
 ### Task 1: ScanQueue — state machine
 
 **Files:**
-- Create: `RaidInspector/ScanQueue.lua`
+- Create: `SimhammerInspector/ScanQueue.lua`
 - Create: `spec/ScanQueue_spec.lua`
 
 **Interfaces:**
@@ -78,7 +78,7 @@ Create `spec/ScanQueue_spec.lua`:
 local helper = dofile("spec/helper.lua")
 
 local function queue(overrides)
-  local ns = helper.loadModules({ "RaidInspector/ScanQueue.lua" })
+  local ns = helper.loadModules({ "SimhammerInspector/ScanQueue.lua" })
   local config = {
     timeoutSeconds       = 3,
     backoffBase          = 5,
@@ -179,11 +179,11 @@ end)
 powershell -ExecutionPolicy Bypass -File tools\test.ps1 -Filter "ScanQueue state"
 ```
 
-Expected: nine failures with "could not load: .../RaidInspector/ScanQueue.lua".
+Expected: nine failures with "could not load: .../SimhammerInspector/ScanQueue.lua".
 
 - [ ] **Step 3: Write the implementation**
 
-Create `RaidInspector/ScanQueue.lua`:
+Create `SimhammerInspector/ScanQueue.lua`:
 
 ```lua
 local addonName, ns = ...
@@ -300,7 +300,7 @@ Expected: `9 passed, 0 failed`.
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add RaidInspector/ScanQueue.lua spec/ScanQueue_spec.lua
+git add SimhammerInspector/ScanQueue.lua spec/ScanQueue_spec.lua
 git commit -m "feat: ScanQueue state machine with a pass-completeness gate"
 ```
 
@@ -309,7 +309,7 @@ git commit -m "feat: ScanQueue state machine with a pass-completeness gate"
 ### Task 2: ScanQueue — tiers, budget and selection
 
 **Files:**
-- Modify: `RaidInspector/ScanQueue.lua`
+- Modify: `SimhammerInspector/ScanQueue.lua`
 - Modify: `spec/ScanQueue_spec.lua`
 
 **Interfaces:**
@@ -440,7 +440,7 @@ Expected: eleven failures.
 
 - [ ] **Step 3: Write the implementation**
 
-Add to `RaidInspector/ScanQueue.lua`, before `Queue:stateOf`:
+Add to `SimhammerInspector/ScanQueue.lua`, before `Queue:stateOf`:
 
 ```lua
 function Queue:setRangeHint(guid, inRange)
@@ -513,7 +513,7 @@ Expected: `20 passed, 0 failed`.
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add RaidInspector/ScanQueue.lua spec/ScanQueue_spec.lua
+git add SimhammerInspector/ScanQueue.lua spec/ScanQueue_spec.lua
 git commit -m "feat: ScanQueue tiers and starvation-proof selection"
 ```
 
@@ -522,7 +522,7 @@ git commit -m "feat: ScanQueue tiers and starvation-proof selection"
 ### Task 3: Cache
 
 **Files:**
-- Create: `RaidInspector/Cache.lua`
+- Create: `SimhammerInspector/Cache.lua`
 - Create: `spec/Cache_spec.lua`
 
 **Interfaces:**
@@ -545,7 +545,7 @@ Create `spec/Cache_spec.lua`:
 local helper = dofile("spec/helper.lua")
 
 local function cache(store, overrides)
-  local ns = helper.loadModules({ "RaidInspector/Cache.lua" })
+  local ns = helper.loadModules({ "SimhammerInspector/Cache.lua" })
   local config = { schemaVersion = 1, staleSeconds = 7200, pruneSeconds = 2592000 }
   for k, v in pairs(overrides or {}) do config[k] = v end
   return ns.Cache.new(store or {}, config), ns
@@ -641,7 +641,7 @@ Expected: eleven failures.
 
 - [ ] **Step 3: Write the implementation**
 
-Create `RaidInspector/Cache.lua`:
+Create `SimhammerInspector/Cache.lua`:
 
 ```lua
 local addonName, ns = ...
@@ -706,7 +706,7 @@ Expected: `11 passed, 0 failed`.
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add RaidInspector/Cache.lua spec/Cache_spec.lua
+git add SimhammerInspector/Cache.lua spec/Cache_spec.lua
 git commit -m "feat: Cache with staleness, pruning and discard-on-schema-change"
 ```
 
@@ -715,11 +715,11 @@ git commit -m "feat: Cache with staleness, pruning and discard-on-schema-change"
 ### Task 4: Hydrator, Scanner, Roster and Core
 
 **Files:**
-- Create: `RaidInspector/Hydrator.lua`
-- Create: `RaidInspector/Scanner.lua`
-- Create: `RaidInspector/Roster.lua`
-- Create: `RaidInspector/Core.lua`
-- Create: `RaidInspector/RaidInspector.toc`
+- Create: `SimhammerInspector/Hydrator.lua`
+- Create: `SimhammerInspector/Scanner.lua`
+- Create: `SimhammerInspector/Roster.lua`
+- Create: `SimhammerInspector/Core.lua`
+- Create: `SimhammerInspector/SimhammerInspector.toc`
 - Create: `tools/deploy.ps1`
 
 These four modules talk to the WoW API and cannot be unit tested outside the game. They are
@@ -758,20 +758,20 @@ unit token. Fires callbacks when players join or leave so the queue stays in ste
 - treats a request with no reply inside the timeout as `onTimeout`
 
 **`Core`** — wiring, SavedVariables binding, and slash commands:
-- `/ri` toggles the report
-- `/ri scan` runs a priority pass: flush, reset backoffs, requeue everyone in range
-- `/ri report` prints findings per player to chat, grouped, with the coverage line
-- `/ri debug` prints queue state per player
+- `/sh` toggles the report
+- `/sh scan` runs a priority pass: flush, reset backoffs, requeue everyone in range
+- `/sh report` prints findings per player to chat, grouped, with the coverage line
+- `/sh debug` prints queue state per player
 
 - [ ] **Step 1: Write the TOC**
 
-Create `RaidInspector/RaidInspector.toc`. Load order matters: pure modules first, wiring last.
+Create `SimhammerInspector/SimhammerInspector.toc`. Load order matters: pure modules first, wiring last.
 
 ```
 ## Interface: 120007
-## Title: Raid Inspector
+## Title: Simhammer Inspector
 ## Notes: Live raid gear inspection.
-## SavedVariablesPerCharacter: RaidInspectorDB
+## SavedVariablesPerCharacter: SimhammerInspectorDB
 
 Version.lua
 Data\Version.lua
@@ -800,7 +800,7 @@ lines, something that belongs in `ScanQueue` has leaked into it.
 
 - [ ] **Step 3: Write the deploy script**
 
-Create `tools/deploy.ps1`, mirroring `tools/deploy-spike.ps1` but for `RaidInspector/`.
+Create `tools/deploy.ps1`, mirroring `tools/deploy-spike.ps1` but for `SimhammerInspector/`.
 
 - [ ] **Step 4: Verify the whole suite still passes**
 
@@ -819,10 +819,10 @@ powershell -ExecutionPolicy Bypass -File tools\deploy.ps1
 In game, in a group or raid:
 
 1. `/reload`
-2. `/ri debug` — every group member should appear, initially `unseen`
-3. Wait roughly a minute, then `/ri debug` again — states should be advancing
-4. `/ri report` — findings per player, with the coverage line
-5. Open Blizzard's own inspect window on someone; `/ri debug` should show the queue paused
+2. `/sh debug` — every group member should appear, initially `unseen`
+3. Wait roughly a minute, then `/sh debug` again — states should be advancing
+4. `/sh report` — findings per player, with the coverage line
+5. Open Blizzard's own inspect window on someone; `/sh debug` should show the queue paused
 6. Enter combat; the queue should pause and resume afterwards
 
 **What to check specifically**, because these are the assumptions the spike could not settle:
@@ -835,7 +835,7 @@ In game, in a group or raid:
 - [ ] **Step 6: Commit**
 
 ```powershell
-git add RaidInspector tools/deploy.ps1
+git add SimhammerInspector tools/deploy.ps1
 git commit -m "feat: runtime layer -- roster, hydrator, scanner and wiring"
 ```
 

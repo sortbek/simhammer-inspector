@@ -1,4 +1,4 @@
-# Raid Inspector — Implementation plan, part 6: SimC export
+# Simhammer Inspector — Implementation plan, part 6: SimC export
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -68,7 +68,7 @@ English throughout.
 
 ### Task 1: LinkParser — gem bonus IDs
 
-**Files:** `RaidInspector/LinkParser.lua`, `spec/LinkParser_spec.lua`
+**Files:** `SimhammerInspector/LinkParser.lua`, `spec/LinkParser_spec.lua`
 
 **Interfaces:** the parse result gains `gemBonusIDs`, a dense array. Empty when absent.
 
@@ -87,7 +87,7 @@ modifier pairs. The parser currently stops at the modifiers, so that section is 
 
 ### Task 2: SimcExport — the pure profile builder
 
-**Files:** `RaidInspector/SimcExport.lua`, `spec/SimcExport_spec.lua`
+**Files:** `SimhammerInspector/SimcExport.lua`, `spec/SimcExport_spec.lua`
 
 **Interfaces:**
 - `ns.SimcExport.tokenize(text)` lowercases, replaces spaces and apostrophes with underscores.
@@ -110,7 +110,7 @@ Pure: no WoW API, no state. Tested against the real captured links.
 
 ### Task 3: Capture talents, race and level
 
-**Files:** `RaidInspector/Scanner.lua`, `RaidInspector/Roster.lua`
+**Files:** `SimhammerInspector/Scanner.lua`, `SimhammerInspector/Roster.lua`
 
 `C_Traits.GenerateInspectImportString` needs the unit and only works after a successful
 inspect. It is called inside the `INSPECT_READY` handler, guarded by `pcall` because it is a
@@ -126,7 +126,7 @@ new dependency and an error must not take the scanner down again.
 
 ### Task 4: The export window
 
-**Files:** `RaidInspector/UI/Export.lua`, `RaidInspector/Core.lua`, `RaidInspector.toc`
+**Files:** `SimhammerInspector/UI/Export.lua`, `SimhammerInspector/Core.lua`, `SimhammerInspector.toc`
 
 A scrolling multi-line edit box with the text selected, plus a line stating how many profiles
 were produced and which players were skipped and why.
@@ -136,7 +136,7 @@ produces a number that looks real. Players whose talent string is missing are li
 skipped rather than exported incomplete.
 
 - [ ] **Step 1:** Build the window with a `ScrollFrame` and `EditBox`, Escape to close.
-- [ ] **Step 2:** Wire `/ri simc` and a button in the grid title bar.
+- [ ] **Step 2:** Wire `/sh simc` and a button in the grid title bar.
 - [ ] **Step 3:** Report skipped players and the reason.
 - [ ] **Step 4:** Verify, deploy, commit.
 

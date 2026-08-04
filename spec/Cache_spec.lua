@@ -1,7 +1,7 @@
 local helper = dofile("spec/helper.lua")
 
 local function cache(store, overrides)
-  local ns = helper.loadModules({ "RaidInspector/Cache.lua" })
+  local ns = helper.loadModules({ "SimhammerInspector/Cache.lua" })
   local config = { schemaVersion = 1, staleSeconds = 7200, pruneSeconds = 2592000 }
   for k, v in pairs(overrides or {}) do config[k] = v end
   return ns.Cache.new(store or {}, config)

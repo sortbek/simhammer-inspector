@@ -1,6 +1,6 @@
 local addonName, ns = ...
 
-RaidInspectorSpikeDB = RaidInspectorSpikeDB or {}
+SimhammerInspectorSpikeDB = SimhammerInspectorSpikeDB or {}
 
 -- The sixteen checked slots, in the order used by the spec.
 local SLOTS = {
@@ -88,14 +88,14 @@ local function capture(unit, label)
     end
   end
 
-  table.insert(RaidInspectorSpikeDB, entry)
+  table.insert(SimhammerInspectorSpikeDB, entry)
   print(string.format("Spike: captured %s (%d slots).", label, count))
 end
 
 SLASH_RISPIKE1 = "/rispike"
 SlashCmdList["RISPIKE"] = function(msg)
   if msg == "wipe" then
-    RaidInspectorSpikeDB = {}
+    SimhammerInspectorSpikeDB = {}
     print("Spike: database cleared.")
     return
   end

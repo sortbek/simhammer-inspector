@@ -1,4 +1,4 @@
-# Raid Inspector — Implementation plan, part 2: completing the rules
+# Simhammer Inspector — Implementation plan, part 2: completing the rules
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -30,7 +30,7 @@ Unchanged from part 1, and they hold in full:
 - **No WoW globals in pure modules.** The harness does not shim them.
 - **No `#` on tables with holes.** Count explicitly.
 - **No assumptions about integer width.** Everything stays below 2^53.
-- Addon folder and namespace: `RaidInspector`. LF line endings, UTF-8 without BOM.
+- Addon folder and namespace: `SimhammerInspector`. LF line endings, UTF-8 without BOM.
 - All source, comments, test names, documentation and commit messages in English.
 
 ## What the spike established, and what this plan builds on it
@@ -77,7 +77,7 @@ local env = {}
 local chunk = assert(loadfile(svPath))
 setfenv(chunk, env)
 chunk()
-local db = assert(env.RaidInspectorSpikeDB, "no RaidInspectorSpikeDB found")
+local db = assert(env.SimhammerInspectorSpikeDB, "no SimhammerInspectorSpikeDB found")
 
 print("-- GENERATED from spike data, Midnight 12.0.7 build 68887.")
 print("-- Do not edit by hand; regenerate with tools/extract-hydrated.lua.")
@@ -122,7 +122,7 @@ Lua 5.1 fails to parse the file with `unexpected symbol near '<bom>'`. It also v
 project's UTF-8-without-BOM constraint. Write the file explicitly instead:
 
 ```powershell
-$sv = "C:\Program Files (x86)\World of Warcraft\_retail_\WTF\Account\JEFFWIENEN\SavedVariables\RaidInspectorSpike.lua"
+$sv = "C:\Program Files (x86)\World of Warcraft\_retail_\WTF\Account\JEFFWIENEN\SavedVariables\SimhammerInspectorSpike.lua"
 $out = & "tools\lua\lua5.1.exe" "tools\extract-hydrated.lua" $sv
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 [System.IO.File]::WriteAllText("$PWD\spec\fixtures\hydrated.lua", ($out -join "`n") + "`n", $utf8NoBom)
@@ -193,7 +193,7 @@ git commit -m "test: hydrated fixtures from real spike data"
 ### Task 2: UpgradeTrackAdapter
 
 **Files:**
-- Create: `RaidInspector/UpgradeTrackAdapter.lua`
+- Create: `SimhammerInspector/UpgradeTrackAdapter.lua`
 - Create: `spec/UpgradeTrackAdapter_spec.lua`
 
 **Interfaces:**
@@ -214,7 +214,7 @@ local helper   = dofile("spec/helper.lua")
 local tooltips = dofile("spec/fixtures/tooltips.lua")
 
 local function adapter()
-  return helper.loadModules({ "RaidInspector/UpgradeTrackAdapter.lua" }).UpgradeTrackAdapter
+  return helper.loadModules({ "SimhammerInspector/UpgradeTrackAdapter.lua" }).UpgradeTrackAdapter
 end
 
 local function pattern()
@@ -298,11 +298,11 @@ end)
 powershell -ExecutionPolicy Bypass -File tools\test.ps1 -Filter "UpgradeTrackAdapter"
 ```
 
-Expected: ten failures with "could not load: .../RaidInspector/UpgradeTrackAdapter.lua".
+Expected: ten failures with "could not load: .../SimhammerInspector/UpgradeTrackAdapter.lua".
 
 - [ ] **Step 3: Write the implementation**
 
-Create `RaidInspector/UpgradeTrackAdapter.lua`:
+Create `SimhammerInspector/UpgradeTrackAdapter.lua`:
 
 ```lua
 local addonName, ns = ...
@@ -374,7 +374,7 @@ Expected: `10 passed, 0 failed`.
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add RaidInspector/UpgradeTrackAdapter.lua spec/UpgradeTrackAdapter_spec.lua
+git add SimhammerInspector/UpgradeTrackAdapter.lua spec/UpgradeTrackAdapter_spec.lua
 git commit -m "feat: UpgradeTrackAdapter reads the track from the tooltip"
 ```
 
@@ -383,7 +383,7 @@ git commit -m "feat: UpgradeTrackAdapter reads the track from the tooltip"
 ### Task 3: Rules — item shape and upgrades_left
 
 **Files:**
-- Modify: `RaidInspector/Rules.lua`
+- Modify: `SimhammerInspector/Rules.lua`
 - Modify: `spec/Rules_spec.lua`
 
 **Interfaces:**
@@ -504,7 +504,7 @@ gem path — do not read those as evidence that anything works yet.
 
 - [ ] **Step 4: Adapt the implementation**
 
-Add to `RaidInspector/Rules.lua`, before `Rules.evaluateSlot`:
+Add to `SimhammerInspector/Rules.lua`, before `Rules.evaluateSlot`:
 
 ```lua
 local function checkUpgrade(findings, slot, upgrade, slotRecord, context)
@@ -572,7 +572,7 @@ Expected: `24 passed, 0 failed` — the nineteen from part 1 plus the five new o
 - [ ] **Step 6: Commit**
 
 ```powershell
-git add RaidInspector/Rules.lua spec/Rules_spec.lua
+git add SimhammerInspector/Rules.lua spec/Rules_spec.lua
 git commit -m "feat: Rules reports remaining upgrades and works on an item record"
 ```
 
@@ -581,7 +581,7 @@ git commit -m "feat: Rules reports remaining upgrades and works on an item recor
 ### Task 4: Rules — empty and missing sockets
 
 **Files:**
-- Modify: `RaidInspector/Rules.lua`
+- Modify: `SimhammerInspector/Rules.lua`
 - Modify: `spec/Rules_spec.lua`
 
 **Interfaces:**
@@ -676,7 +676,7 @@ for a not-yet-implemented check, but it means the four passes prove nothing.
 
 - [ ] **Step 3: Write the implementation**
 
-Add to `RaidInspector/Rules.lua`, right after `checkUpgrade`:
+Add to `SimhammerInspector/Rules.lua`, right after `checkUpgrade`:
 
 ```lua
 local function checkSockets(findings, slot, item, slotRecord, context)
@@ -725,7 +725,7 @@ rather than adjusting the expected number.
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add RaidInspector/Rules.lua spec/Rules_spec.lua
+git add SimhammerInspector/Rules.lua spec/Rules_spec.lua
 git commit -m "feat: Rules reports empty and missing sockets"
 ```
 
@@ -734,8 +734,8 @@ git commit -m "feat: Rules reports empty and missing sockets"
 ### Task 5: DataVersion — degrade on patch version
 
 **Files:**
-- Create: `RaidInspector/DataVersion.lua`
-- Create: `RaidInspector/Data/Version.lua`
+- Create: `SimhammerInspector/DataVersion.lua`
+- Create: `SimhammerInspector/Data/Version.lua`
 - Create: `spec/DataVersion_spec.lua`
 
 **Interfaces:**
@@ -757,7 +757,7 @@ Create `spec/DataVersion_spec.lua`:
 local helper = dofile("spec/helper.lua")
 
 local function dv()
-  return helper.loadModules({ "RaidInspector/DataVersion.lua" }).DataVersion
+  return helper.loadModules({ "SimhammerInspector/DataVersion.lua" }).DataVersion
 end
 
 describe("DataVersion comparison", function()
@@ -816,7 +816,7 @@ Expected: nine failures with "could not load".
 
 - [ ] **Step 3: Write the implementation**
 
-Create `RaidInspector/DataVersion.lua`:
+Create `SimhammerInspector/DataVersion.lua`:
 
 ```lua
 local addonName, ns = ...
@@ -861,7 +861,7 @@ end
 
 - [ ] **Step 4: Write the generated version file**
 
-Create `RaidInspector/Data/Version.lua`:
+Create `SimhammerInspector/Data/Version.lua`:
 
 ```lua
 local addonName, ns = ...
@@ -887,7 +887,7 @@ Expected: `90 passed, 0 failed`.
 - [ ] **Step 6: Commit**
 
 ```powershell
-git add RaidInspector/DataVersion.lua RaidInspector/Data/Version.lua spec/DataVersion_spec.lua
+git add SimhammerInspector/DataVersion.lua SimhammerInspector/Data/Version.lua spec/DataVersion_spec.lua
 git commit -m "feat: DataVersion degrades on patch version rather than build number"
 ```
 

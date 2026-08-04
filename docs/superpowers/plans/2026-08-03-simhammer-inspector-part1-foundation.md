@@ -1,4 +1,4 @@
-# Raid Inspector — Implementation plan, part 1: foundation
+# Simhammer Inspector — Implementation plan, part 1: foundation
 
 > **Status: EXECUTED and merged.** All eight tasks are complete and the suite is green.
 > This document is kept as the record of what was built and why.
@@ -46,12 +46,12 @@ perpetual vigilance. The binary lives in `tools/lua/` and is checked in.
 - **No assumptions about integer width.** All arithmetic stays below 2^53 so 5.1 doubles and
   5.4 integers produce the same result.
 - **Target game version:** retail Midnight (12.0.7, build 68887).
-- Addon folder and namespace: `RaidInspector`. LF line endings, UTF-8 without BOM.
+- Addon folder and namespace: `SimhammerInspector`. LF line endings, UTF-8 without BOM.
 - All source, comments, test names, documentation and commit messages in English.
 
 ## References
 
-- Spec: `docs/superpowers/specs/2026-08-03-raid-inspector-design.md`
+- Spec: `docs/superpowers/specs/2026-08-03-simhammer-inspector-design.md`
 - Spike results: `docs/superpowers/spike-results.md`
 - WoW AddOns folder on this machine:
   `C:\Program Files (x86)\World of Warcraft\_retail_\Interface\AddOns`
@@ -61,7 +61,7 @@ perpetual vigilance. The binary lives in `tools/lua/` and is checked in.
 ### Task 1: Toolchain, test runner and repository skeleton — DONE
 
 **Files:** `tools/lua/lua5.1.exe`, `tools/run-tests.lua`, `tools/test.ps1`,
-`spec/helper.lua`, `spec/harness_spec.lua`, `RaidInspector/Version.lua`, `.gitattributes`,
+`spec/helper.lua`, `spec/harness_spec.lua`, `SimhammerInspector/Version.lua`, `.gitattributes`,
 `.gitignore`
 
 **Interfaces:**
@@ -93,7 +93,7 @@ working directory to the repo root, since spec files use a relative `dofile("spe
 
 ### Task 2: LinkParser — fixed fields — DONE
 
-**Files:** `RaidInspector/LinkParser.lua`, `spec/LinkParser_spec.lua`,
+**Files:** `SimhammerInspector/LinkParser.lua`, `spec/LinkParser_spec.lua`,
 `spec/fixtures/links.lua`
 
 **Interfaces:** `ns.LinkParser.parse(link)` returns `nil` for unusable input, otherwise a
@@ -109,7 +109,7 @@ meaningful — the global constraints forbid that pattern.
 
 ### Task 3: LinkParser — bonus IDs and modifiers — DONE
 
-**Files:** `RaidInspector/LinkParser.lua`, `spec/LinkParser_spec.lua`,
+**Files:** `SimhammerInspector/LinkParser.lua`, `spec/LinkParser_spec.lua`,
 `spec/fixtures/links.lua`
 
 **Interfaces:** the parse result gains `bonusIDs` (dense array) and `modifiers` (map of
@@ -127,7 +127,7 @@ mistake with this format.
 
 ### Task 4: Spike addon for in-game verification — DONE
 
-**Files:** `spike/RaidInspectorSpike/`, `tools/deploy-spike.ps1`,
+**Files:** `spike/SimhammerInspectorSpike/`, `tools/deploy-spike.ps1`,
 `docs/superpowers/spike-results.md`
 
 A throwaway addon whose only purpose is to measure what documentation cannot answer. Deployed
@@ -158,7 +158,7 @@ passed — confirming the parser was right rather than merely self-consistent.
 
 ### Task 5: Evidence — DONE
 
-**Files:** `RaidInspector/Evidence.lua`, `spec/Evidence_spec.lua`
+**Files:** `SimhammerInspector/Evidence.lua`, `spec/Evidence_spec.lua`
 
 **Interfaces:**
 - `ns.Evidence.fingerprint(link)` returns a number identical under Lua 5.1 and 5.4, or `nil`.
@@ -181,7 +181,7 @@ missing tooltip both times must confirm `linkComplete` and **not** confirm `tool
 
 ### Task 6: Policy — DONE
 
-**Files:** `RaidInspector/Policy/Slots.lua`, `RaidInspector/Policy/Season.lua`,
+**Files:** `SimhammerInspector/Policy/Slots.lua`, `SimhammerInspector/Policy/Season.lua`,
 `spec/Policy_spec.lua`
 
 **Interfaces:** `Slots.ALL`, `Slots.TIER`, `Slots.isEnchantable(slot, itemSubclass)`,
@@ -204,8 +204,8 @@ never derived from observation.
 
 ### Task 7: Rules — enchants and gems — DONE
 
-**Files:** `RaidInspector/Rules.lua`, `spec/Rules_spec.lua`,
-`RaidInspector/Data/Enchants.lua`, `RaidInspector/Data/Gems.lua`
+**Files:** `SimhammerInspector/Rules.lua`, `spec/Rules_spec.lua`,
+`SimhammerInspector/Data/Enchants.lua`, `SimhammerInspector/Data/Gems.lua`
 
 **Interfaces:** `ns.Rules.evaluateSlot(slot, parsed, slotRecord, context)` returns a dense
 array of findings shaped
@@ -223,8 +223,8 @@ The data tables are stubs, generated properly in part 3.
 
 ### Task 8: Rules — tier and embellishments — DONE
 
-**Files:** `RaidInspector/Rules.lua`, `spec/Rules_spec.lua`,
-`RaidInspector/Data/Embellishments.lua`
+**Files:** `SimhammerInspector/Rules.lua`, `spec/Rules_spec.lua`,
+`SimhammerInspector/Data/Embellishments.lua`
 
 **Interfaces:** `ns.Rules.evaluatePlayer(slots, context)` where `slots` maps slot ID to
 `{ parsed, record, setID }`. Returns findings for the player as a whole, including
@@ -255,4 +255,4 @@ harness      4   Lua 5.1 fidelity and the deep-equal reporter
 ```
 
 Merged to `master`. Continues in
-`docs/superpowers/plans/2026-08-03-raid-inspector-part2-rules.md`.
+`docs/superpowers/plans/2026-08-03-simhammer-inspector-part2-rules.md`.

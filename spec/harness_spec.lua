@@ -18,7 +18,7 @@ describe("test harness", function()
 
   it("loads a module with the addon namespace", function()
     local helper = dofile("spec/helper.lua")
-    local ns = helper.loadModules({ "RaidInspector/Version.lua" })
+    local ns = helper.loadModules({ "SimhammerInspector/Version.lua" })
     assert.equals("0.1.0", ns.VERSION)
   end)
 end)

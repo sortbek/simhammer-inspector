@@ -1,4 +1,4 @@
-// Generates RaidInspector/Data/*.lua from the wago.tools DB2 CSV snapshots in
+// Generates SimhammerInspector/Data/*.lua from the wago.tools DB2 CSV snapshots in
 // tools/csv/. Run with:
 //
 //   node tools/generate.mjs                 (uses the checked-in snapshots)
@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const CSV_DIR = join(ROOT, "tools", "csv");
-const DATA_DIR = join(ROOT, "RaidInspector", "Data");
+const DATA_DIR = join(ROOT, "SimhammerInspector", "Data");
 
 // Pin the build. Regenerating against a different build is a deliberate act,
 // not something that should happen silently because a hotfix shipped.

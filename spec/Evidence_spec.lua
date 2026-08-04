@@ -1,7 +1,7 @@
 local helper = dofile("spec/helper.lua")
 
 local function evidence()
-  return helper.loadModules({ "RaidInspector/Evidence.lua" }).Evidence
+  return helper.loadModules({ "SimhammerInspector/Evidence.lua" }).Evidence
 end
 
 local COMPLETE = {

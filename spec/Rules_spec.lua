@@ -1,12 +1,12 @@
 local helper = dofile("spec/helper.lua")
 
 local MODULES = {
-  "RaidInspector/Policy/Slots.lua",
-  "RaidInspector/Policy/Season.lua",
-  "RaidInspector/Data/Enchants.lua",
-  "RaidInspector/Data/Gems.lua",
-  "RaidInspector/Evidence.lua",
-  "RaidInspector/Rules.lua",
+  "SimhammerInspector/Policy/Slots.lua",
+  "SimhammerInspector/Policy/Season.lua",
+  "SimhammerInspector/Data/Enchants.lua",
+  "SimhammerInspector/Data/Gems.lua",
+  "SimhammerInspector/Evidence.lua",
+  "SimhammerInspector/Rules.lua",
 }
 
 -- The generated Data tables hold thousands of real entries. Testing the rules

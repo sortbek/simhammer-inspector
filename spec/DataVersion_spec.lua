@@ -1,7 +1,7 @@
 local helper = dofile("spec/helper.lua")
 
 local function dv()
-  return helper.loadModules({ "RaidInspector/DataVersion.lua" }).DataVersion
+  return helper.loadModules({ "SimhammerInspector/DataVersion.lua" }).DataVersion
 end
 
 describe("DataVersion comparison", function()

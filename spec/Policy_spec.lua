@@ -2,8 +2,8 @@ local helper = dofile("spec/helper.lua")
 
 local function policy()
   return helper.loadModules({
-    "RaidInspector/Policy/Slots.lua",
-    "RaidInspector/Policy/Season.lua",
+    "SimhammerInspector/Policy/Slots.lua",
+    "SimhammerInspector/Policy/Season.lua",
   }).Policy
 end
 

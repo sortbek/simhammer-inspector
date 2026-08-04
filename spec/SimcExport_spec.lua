@@ -3,8 +3,8 @@ local links  = dofile("spec/fixtures/links.lua")
 
 local function modules()
   return helper.loadModules({
-    "RaidInspector/LinkParser.lua",
-    "RaidInspector/SimcExport.lua",
+    "SimhammerInspector/LinkParser.lua",
+    "SimhammerInspector/SimcExport.lua",
   })
 end
 

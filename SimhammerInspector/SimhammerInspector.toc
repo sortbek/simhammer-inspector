@@ -1,7 +1,7 @@
 ## Interface: 120007
-## Title: Raid Inspector
+## Title: Simhammer Inspector
 ## Notes: Live raid gear inspection.
-## SavedVariablesPerCharacter: RaidInspectorDB
+## SavedVariablesPerCharacter: SimhammerInspectorDB
 
 Version.lua
 Data\Version.lua

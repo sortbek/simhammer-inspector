@@ -195,7 +195,7 @@ function Grid.composeWhisper(guid)
   end
 
   if table.getn(parts) == 0 then
-    print("|cff33ff99RaidInspector|r " .. (entry.name or "?") .. " has nothing to fix.")
+    print("|cff33ff99Simhammer|r " .. (entry.name or "?") .. " has nothing to fix.")
     return
   end
 
@@ -522,7 +522,7 @@ end
 function Grid.create()
   if frame then return frame end
 
-  frame = CreateFrame("Frame", "RaidInspectorGrid", UIParent)
+  frame = CreateFrame("Frame", "SimhammerInspectorGrid", UIParent)
   frame:SetSize(gridWidth() + M.padding * 2,
                 M.headerHeight + 20 * M.rowHeight + M.padding * 2)
   frame:SetPoint("CENTER")
@@ -543,7 +543,7 @@ function Grid.create()
 
   local title = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   title:SetPoint("LEFT", titleBar, "LEFT", M.padding, 0)
-  title:SetText("Raid Inspector")
+  title:SetText("Simhammer Inspector")
   ns.Theme.setText(title, C.textPrimary)
 
   local close = CreateFrame("Button", nil, titleBar, "UIPanelCloseButton")
@@ -613,7 +613,7 @@ function Grid.create()
   content:SetSize(gridWidth(), 1)
 
   -- Escape closes it, the way every other WoW panel behaves.
-  tinsert(UISpecialFrames, "RaidInspectorGrid")
+  tinsert(UISpecialFrames, "SimhammerInspectorGrid")
 
   frame:Hide()
   return frame

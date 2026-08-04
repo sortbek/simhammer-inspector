@@ -8,10 +8,10 @@ local env = {}
 local chunk = assert(loadfile(svPath))
 setfenv(chunk, env)
 chunk()
-local db = assert(env.RaidInspectorSpikeDB, "no RaidInspectorSpikeDB found")
+local db = assert(env.SimhammerInspectorSpikeDB, "no SimhammerInspectorSpikeDB found")
 
 local ns = {}
-assert(loadfile("RaidInspector/LinkParser.lua"))("RaidInspector", ns)
+assert(loadfile("SimhammerInspector/LinkParser.lua"))("SimhammerInspector", ns)
 local parse = ns.LinkParser.parse
 
 local enchants, gems = {}, {}

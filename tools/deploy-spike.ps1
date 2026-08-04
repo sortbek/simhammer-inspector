@@ -1,6 +1,6 @@
 $addons = "C:\Program Files (x86)\World of Warcraft\_retail_\Interface\AddOns"
-$source = Join-Path (Split-Path -Parent $PSScriptRoot) "spike\RaidInspectorSpike"
-$target = Join-Path $addons "RaidInspectorSpike"
+$source = Join-Path (Split-Path -Parent $PSScriptRoot) "spike\SimhammerInspectorSpike"
+$target = Join-Path $addons "SimhammerInspectorSpike"
 
 if (-not (Test-Path $addons)) { Write-Host "AddOns folder not found: $addons"; exit 1 }
 

@@ -11,16 +11,16 @@ local env = {}
 local chunk = assert(loadfile(svPath))
 setfenv(chunk, env)
 chunk()
-local db = assert(env.RaidInspectorSpikeDB, "no RaidInspectorSpikeDB found")
+local db = assert(env.SimhammerInspectorSpikeDB, "no SimhammerInspectorSpikeDB found")
 
 local ns = {}
 for _, path in ipairs({
-  "RaidInspector/LinkParser.lua",
-  "RaidInspector/Data/Enchants.lua",
-  "RaidInspector/Data/Gems.lua",
-  "RaidInspector/Data/Version.lua",
+  "SimhammerInspector/LinkParser.lua",
+  "SimhammerInspector/Data/Enchants.lua",
+  "SimhammerInspector/Data/Gems.lua",
+  "SimhammerInspector/Data/Version.lua",
 }) do
-  assert(loadfile(path), "could not load " .. path)("RaidInspector", ns)
+  assert(loadfile(path), "could not load " .. path)("SimhammerInspector", ns)
 end
 
 local parse = ns.LinkParser.parse

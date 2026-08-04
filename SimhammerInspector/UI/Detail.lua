@@ -57,7 +57,7 @@ local function create()
   -- roster visible while you read one player.
   local parent = ns.Grid.getFrame()
 
-  frame = CreateFrame("Frame", "RaidInspectorDetail", parent)
+  frame = CreateFrame("Frame", "SimhammerInspectorDetail", parent)
   frame:SetWidth(WIDTH + 40)
   -- Minus one so the two panel borders land on top of each other and read as a
   -- single seam. At zero you get a two pixel double line; at anything positive
@@ -90,7 +90,7 @@ local function create()
   subText:SetJustifyH("LEFT")
   ns.Theme.setText(subText, C.textMuted)
 
-  scroll = CreateFrame("ScrollFrame", "RaidInspectorDetailScroll", frame,
+  scroll = CreateFrame("ScrollFrame", "SimhammerInspectorDetailScroll", frame,
                        "UIPanelScrollFrameTemplate")
   scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -50)
   scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -28, 12)
@@ -113,7 +113,7 @@ function Detail.show(guid)
 
   local entry = ns.Core and ns.Core.entryFor and ns.Core.entryFor(guid)
   if not entry then
-    titleText:SetText("Raid Inspector")
+    titleText:SetText("Simhammer Inspector")
     subText:SetText("no data for this player yet")
     for i = 1, table.getn(slotRows) do slotRows[i]:Hide() end
     frame:Show()

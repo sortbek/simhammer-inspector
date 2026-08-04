@@ -161,7 +161,7 @@ function Theme.button(parent, label, width, onClick, tooltip)
   b:SetScript("OnClick", function()
     local ok, err = pcall(onClick)
     if not ok then
-      DEFAULT_CHAT_FRAME:AddMessage("|cffff4444RaidInspector|r " .. tostring(err))
+      DEFAULT_CHAT_FRAME:AddMessage("|cffff4444Simhammer|r " .. tostring(err))
     end
   end)
 

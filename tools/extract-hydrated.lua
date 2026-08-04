@@ -9,7 +9,7 @@ local env = {}
 local chunk = assert(loadfile(svPath))
 setfenv(chunk, env)
 chunk()
-local db = assert(env.RaidInspectorSpikeDB, "no RaidInspectorSpikeDB found")
+local db = assert(env.SimhammerInspectorSpikeDB, "no SimhammerInspectorSpikeDB found")
 
 print("-- GENERATED from spike data, Midnight 12.0.7 build 68887.")
 print("-- Do not edit by hand; regenerate with tools/extract-hydrated.lua.")

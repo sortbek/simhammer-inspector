@@ -1,6 +1,6 @@
 ## Interface: 120007
-## Title: Raid Inspector Spike
+## Title: Simhammer Inspector Spike
 ## Notes: Throwaway addon used to verify assumptions. Do not distribute.
-## SavedVariables: RaidInspectorSpikeDB
+## SavedVariables: SimhammerInspectorSpikeDB
 
 Spike.lua

@@ -15,7 +15,7 @@ function helper.loadModules(paths)
   for i = 1, table.getn(paths) do
     local full = repoRoot() .. "/" .. paths[i]
     local chunk = assert(loadfile(full), "could not load: " .. full)
-    chunk("RaidInspector", ns)
+    chunk("SimhammerInspector", ns)
   end
   return ns
 end

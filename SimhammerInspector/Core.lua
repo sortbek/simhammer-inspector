@@ -3,7 +3,7 @@ local addonName, ns = ...
 local Core = {}
 ns.Core = Core
 
-RaidInspectorDB = RaidInspectorDB or {}
+SimhammerInspectorDB = SimhammerInspectorDB or {}
 
 Core.config = {
   schemaVersion    = 1,
@@ -38,7 +38,7 @@ local queue, cache
 local records = {}
 
 local function say(msg)
-  DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99RaidInspector|r " .. msg)
+  DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99Simhammer|r " .. msg)
 end
 
 -- Derived values are never persisted, so the validity of the generated data is
@@ -476,7 +476,7 @@ local function debugDump()
 end
 
 local function onLogin()
-  cache = ns.Cache.new(RaidInspectorDB, Core.config)
+  cache = ns.Cache.new(SimhammerInspectorDB, Core.config)
   cache:migrate()
   cache:prune(time())
 
@@ -510,7 +510,7 @@ local function onLogin()
 
   local _, status = dataValid()
   say(string.format("loaded %s, data %s (%s)", ns.VERSION, ns.Data.Version.version, status))
-  say("use |cffffff00/ri|r for the grid, |cffffff00/ri report|r for chat output")
+  say("use |cffffff00/sh|r for the grid, |cffffff00/sh report|r for chat output")
 end
 
 -- Reports each prefilter component separately, so a scanner that refuses to
@@ -551,8 +551,12 @@ local function whyDump()
   end
 end
 
-SLASH_RAIDINSPECTOR1 = "/ri"
-SlashCmdList["RAIDINSPECTOR"] = function(msg)
+-- Full name first so it always works, short alias second for daily use. /sh is
+-- short enough to collide with another addon, so it must never be the only way
+-- in.
+SLASH_SIMHAMMERINSPECTOR1 = "/simhammer"
+SLASH_SIMHAMMERINSPECTOR2 = "/sh"
+SlashCmdList["SIMHAMMERINSPECTOR"] = function(msg)
   msg = string.lower(msg or "")
   if msg == "scan" then
     ns.Scanner.rescanAll()
