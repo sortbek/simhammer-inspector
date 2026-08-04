@@ -94,6 +94,14 @@ function Queue:setRangeHint(guid, inRange)
   if p then p.inRange = inRange and true or false end
 end
 
+-- How many of this player's slots are still unconfirmed. Rescanning someone with
+-- outstanding slots yields information; rescanning someone already confirmed
+-- does not, so this orders the queue within a tier.
+function Queue:setPending(guid, count)
+  local p = self.players[guid]
+  if p then p.pending = count or 0 end
+end
+
 -- Tier is a priority class; eligibility is a point in time. Keeping them apart
 -- matters: a player in backoff belongs to tier C regardless of whether their
 -- deadline has passed, and conflating the two makes next() hand out a player
@@ -135,8 +143,17 @@ function Queue:next(now)
     local best = nil
     for guid, p in pairs(self.players) do
       if self:isEligible(guid, now) and self:tierOf(guid, now) == wanted then
-        if not best or p.nextEligibleAt < self.players[best].nextEligibleAt then
+        if not best then
           best = guid
+        else
+          -- Most outstanding slots first; longest wait breaks the tie so nobody
+          -- is passed over indefinitely.
+          local bp = self.players[best]
+          local pending, bestPending = p.pending or 0, bp.pending or 0
+          if pending > bestPending
+             or (pending == bestPending and p.nextEligibleAt < bp.nextEligibleAt) then
+            best = guid
+          end
         end
       end
     end

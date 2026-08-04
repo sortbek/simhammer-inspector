@@ -321,6 +321,36 @@ function Core.exportSimcSelf()
   showBundle({ p })
 end
 
+-- Counts slots that still lack a confirmed reading, and hands that to the queue
+-- so the next request goes to whoever it will teach us the most about. Uses
+-- Evidence directly rather than running Rules: the question is "is this slot
+-- settled", not "what is wrong with it", and the cheap answer is the right one
+-- to run on a timer.
+local function updatePriorities()
+  if not queue then return end
+  local total = table.getn(ALL_SLOTS)
+
+  for guid in pairs(ns.Roster.all()) do
+    local record = records[guid]
+    local pending = total
+
+    if record then
+      local seen, confirmed = 0, 0
+      for _, slotRecord in pairs(record.slots) do
+        seen = seen + 1
+        if ns.Evidence.isConfirmed(slotRecord, { "linkComplete" }, Core.config.minInterval) then
+          confirmed = confirmed + 1
+        end
+      end
+      -- Slots never seen count as outstanding too, otherwise a player we only
+      -- half scanned looks finished.
+      pending = (total - seen) + (seen - confirmed)
+    end
+
+    queue:setPending(guid, pending)
+  end
+end
+
 local function refreshGrid()
   if not ns.Grid or not ns.Grid.isShown() then return end
   local confirmed, total, unreachable = queue:coverage(time())
@@ -444,6 +474,13 @@ local function onLogin()
   C_Timer.NewTicker(2, function()
     local ok, err = pcall(refreshGrid)
     if not ok then say("|cffff4444grid error:|r " .. tostring(err)) end
+  end)
+
+  -- Slower than the grid: priorities only shift when a scan lands, and a request
+  -- goes out at most once every few seconds anyway.
+  C_Timer.NewTicker(5, function()
+    local ok, err = pcall(updatePriorities)
+    if not ok then say("|cffff4444priority error:|r " .. tostring(err)) end
   end)
 
   local _, status = dataValid()

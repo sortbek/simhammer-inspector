@@ -187,6 +187,37 @@ describe("ScanQueue tiers and selection", function()
     assert.equals(2, total)
   end)
 
+  -- A second scan of a player who still has unconfirmed slots yields
+  -- information; a second scan of one who is already fully confirmed does not.
+  -- Ordering by that turns problems red sooner without spending more requests.
+  it("prefers the player with the most unconfirmed slots", function()
+    local q = queue()
+    q:addPlayer("few", 100); q:setRangeHint("few", true); q:setPending("few", 1)
+    q:addPlayer("many", 100); q:setRangeHint("many", true); q:setPending("many", 9)
+    assert.equals("many", q:next(200))
+  end)
+
+  it("falls back to the longest wait when the pending counts match", function()
+    local q = queue()
+    q:addPlayer("later", 150); q:setRangeHint("later", true); q:setPending("later", 3)
+    q:addPlayer("earlier", 100); q:setRangeHint("earlier", true); q:setPending("earlier", 3)
+    assert.equals("earlier", q:next(200))
+  end)
+
+  it("still puts tier A ahead of a cold player with more pending slots", function()
+    local q = queue()
+    q:addPlayer("cold", 100); q:setRangeHint("cold", true); q:setPending("cold", 16)
+    q:onTimeout("cold", 101)
+    q:addPlayer("warm", 100); q:setRangeHint("warm", true); q:setPending("warm", 1)
+    assert.equals("warm", q:next(500))
+  end)
+
+  it("treats an unset pending count as zero rather than erroring", function()
+    local q = queue()
+    q:addPlayer("A", 100); q:setRangeHint("A", true)
+    assert.equals("A", q:next(200))
+  end)
+
   it("lists unreachable players in the coverage report", function()
     local q = queue({ unreachableAfter = 1 })
     q:addPlayer("A", 100); q:setRangeHint("A", true)
