@@ -62,7 +62,9 @@ Theme.metrics = {
   embWidth     = 34,
   summaryWidth = 40,
   padding      = 12,
-  headerHeight = 78,
+  -- Tall enough for the totals line, the coverage line and a row of slot icons
+  -- without any of them crowding each other.
+  headerHeight = 84,
 }
 
 -- Item quality colours, for item names in the detail panel. Blizzard exposes

@@ -8,10 +8,15 @@ ns.Grid = Grid
 
 local SLOTS = { 1, 2, 3, 15, 5, 9, 10, 6, 7, 8, 11, 12, 13, 14, 16, 17 }
 
-local SLOT_ABBREV = {
-  [1] = "Hd", [2] = "Nk", [3] = "Sh", [15] = "Bk", [5] = "Ch", [9] = "Wr",
-  [10] = "Hn", [6] = "Ws", [7] = "Lg", [8] = "Ft", [11] = "R1", [12] = "R2",
-  [13] = "T1", [14] = "T2", [16] = "MH", [17] = "OH",
+-- Blizzard's own inventory slot names, used to ask the client for each slot's
+-- icon. Going through GetInventorySlotInfo rather than hardcoding texture paths
+-- means the icons stay correct if Blizzard moves the art.
+local SLOT_FRAME_NAMES = {
+  [1] = "HeadSlot", [2] = "NeckSlot", [3] = "ShoulderSlot", [15] = "BackSlot",
+  [5] = "ChestSlot", [9] = "WristSlot", [10] = "HandsSlot", [6] = "WaistSlot",
+  [7] = "LegsSlot", [8] = "FeetSlot", [11] = "Finger0Slot", [12] = "Finger1Slot",
+  [13] = "Trinket0Slot", [14] = "Trinket1Slot", [16] = "MainHandSlot",
+  [17] = "SecondaryHandSlot",
 }
 
 local SLOT_NAMES = {
@@ -421,8 +426,8 @@ end
 
 local function buildHeader()
   local header = CreateFrame("Frame", nil, frame)
-  header:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -M.headerHeight + 16)
-  header:SetSize(gridWidth(), 14)
+  header:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -M.headerHeight + 18)
+  header:SetSize(gridWidth(), 18)
 
   local function label(text, x, width)
     local fs = header:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
@@ -434,35 +439,67 @@ local function buildHeader()
     return fs
   end
 
-  label("PLAYER", 8, M.nameWidth)
+  label("PLAYER", 8, M.nameWidth - 8)
   label("ILVL", M.nameWidth, M.ilvlWidth)
   label("EMB", M.nameWidth + M.ilvlWidth, M.embWidth)
 
-  -- Two-letter column heads are only readable once you have learned them, so
-  -- hovering spells the slot out.
+  -- Icons rather than two-letter abbreviations. The abbreviations had to be
+  -- learned, and worse, wide pairs like "MH" did not fit the column and were
+  -- silently ellipsised to "...". An icon is the same width whatever the slot.
   for i = 1, table.getn(SLOTS) do
     local slot = SLOTS[i]
     local hit = CreateFrame("Frame", nil, header)
-    hit:SetSize(M.cellSize, 14)
+    hit:SetSize(M.cellSize, M.cellSize)
     hit:SetPoint("LEFT", header, "LEFT", cellX(i), 0)
 
-    local fs = hit:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    fs:SetAllPoints()
-    fs:SetJustifyH("CENTER")
-    fs:SetText(SLOT_ABBREV[slot] or "?")
-    ns.Theme.setText(fs, C.textFaint)
+    local icon = hit:CreateTexture(nil, "ARTWORK")
+    icon:SetAllPoints()
+    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+    local frameName = SLOT_FRAME_NAMES[slot]
+    local texture = nil
+    if frameName and GetInventorySlotInfo then
+      local ok, _, tex = pcall(GetInventorySlotInfo, frameName)
+      if ok then texture = tex end
+    end
+
+    if texture then
+      icon:SetTexture(texture)
+      -- Held back so the header reads as a label rather than as content: the
+      -- cells below are what the eye should land on.
+      icon:SetDesaturated(true)
+      icon:SetAlpha(0.55)
+    else
+      icon:Hide()
+      local fs = hit:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+      fs:SetAllPoints()
+      fs:SetJustifyH("CENTER")
+      fs:SetText("?")
+      ns.Theme.setText(fs, C.textFaint)
+    end
 
     hit:SetScript("OnEnter", function(self)
+      icon:SetDesaturated(false)
+      icon:SetAlpha(1)
       GameTooltip:SetOwner(self, "ANCHOR_TOP")
       GameTooltip:AddLine(SLOT_NAMES[slot] or ("Slot " .. slot))
       GameTooltip:Show()
-      ns.Theme.setText(fs, C.textMuted)
     end)
     hit:SetScript("OnLeave", function()
+      icon:SetDesaturated(true)
+      icon:SetAlpha(0.55)
       GameTooltip:Hide()
-      ns.Theme.setText(fs, C.textFaint)
     end)
   end
+
+  -- Separates who from what: the identity columns on the left, the gear grid on
+  -- the right.
+  local split = frame:CreateTexture(nil, "ARTWORK")
+  split:SetPoint("TOPLEFT", frame, "TOPLEFT",
+                 M.padding + M.nameWidth + M.ilvlWidth + M.embWidth - 5, -M.headerHeight + 30)
+  split:SetWidth(1)
+  split:SetHeight(24)
+  split:SetColorTexture(C.divider[1], C.divider[2], C.divider[3], C.divider[4])
 
   local divider = frame:CreateTexture(nil, "ARTWORK")
   divider:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -M.headerHeight + 4)
