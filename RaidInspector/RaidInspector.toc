@@ -8,6 +8,7 @@ Data\Version.lua
 Data\Enchants.lua
 Data\Gems.lua
 Data\TierSets.lua
+Data\SpecNames.lua
 Policy\Slots.lua
 Policy\Season.lua
 LinkParser.lua
@@ -15,6 +16,7 @@ Evidence.lua
 UpgradeTrackAdapter.lua
 DataVersion.lua
 Rules.lua
+SimcExport.lua
 ScanQueue.lua
 Cache.lua
 Roster.lua
@@ -23,4 +25,5 @@ Scanner.lua
 UI\Theme.lua
 UI\Grid.lua
 UI\Detail.lua
+UI\Export.lua
 Core.lua

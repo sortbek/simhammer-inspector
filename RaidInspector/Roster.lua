@@ -55,6 +55,11 @@ function Roster.refresh()
       local _, class = UnitClass(unit)
       local name, realm = UnitName(unit)
       local role = UnitGroupRolesAssigned and UnitGroupRolesAssigned(unit) or nil
+      local race = UnitRace and UnitRace(unit) or nil
+      local level = UnitLevel and UnitLevel(unit) or nil
+      -- UnitName returns nil for the realm when the player is on your own, and
+      -- a SimC profile needs it spelled out either way.
+      if not realm or realm == "" then realm = GetRealmName and GetRealmName() or nil end
       local info = members[guid]
       local isNew = not info
       if isNew then
@@ -62,7 +67,7 @@ function Roster.refresh()
         members[guid] = info
       end
       info.name, info.realm, info.class, info.unit = name, realm, class, unit
-      info.role = role
+      info.role, info.race, info.level = role, race, level
       if isNew then notify("added", guid, info) end
     end
   end

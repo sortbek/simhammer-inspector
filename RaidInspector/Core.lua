@@ -210,6 +210,66 @@ function Core.entries()
   return out
 end
 
+-- SimC slot keys, in the same order as ALL_SLOTS. The reference implementation
+-- uses exactly this ordering, so no translation table is needed beyond the names.
+local SIMC_SLOTS = {
+  "head", "neck", "shoulder", "back", "chest", "wrist", "hands", "waist",
+  "legs", "feet", "finger1", "finger2", "trinket1", "trinket2",
+  "main_hand", "off_hand",
+}
+
+local SIMC_ROLE = { TANK = "tank", HEALER = "heal", DAMAGER = "attack" }
+
+local function simcPlayer(guid)
+  local info = ns.Roster.get(guid)
+  local record = records[guid]
+  if not info or not record then return nil end
+
+  local slots = {}
+  for i = 1, table.getn(ALL_SLOTS) do
+    local slotRecord = record.slots[ALL_SLOTS[i]]
+    if slotRecord and slotRecord.item and slotRecord.item.parsed then
+      slots[table.getn(slots) + 1] = {
+        simcSlot = SIMC_SLOTS[i],
+        parsed = slotRecord.item.parsed,
+      }
+    end
+  end
+
+  local specName = record.specID and ns.Data.SpecNames
+                   and ns.Data.SpecNames[record.specID] or nil
+
+  return {
+    name = info.name, realm = info.realm, region = Core.region(),
+    class = info.class, race = info.race, level = info.level,
+    spec = specName, role = SIMC_ROLE[info.role or ""] or "attack",
+    talents = record.talents,
+    slots = slots,
+  }
+end
+
+function Core.region()
+  local map = { [1] = "US", [2] = "KR", [3] = "EU", [4] = "TW", [5] = "CN" }
+  return map[GetCurrentRegion and GetCurrentRegion() or 0] or "US"
+end
+
+-- DPS only, as requested: tanks and healers are rarely simmed, and every extra
+-- profile is more text to paste.
+function Core.exportSimc()
+  local players = {}
+  for guid, info in pairs(ns.Roster.all()) do
+    if info.role == "DAMAGER" then
+      local p = simcPlayer(guid)
+      if p then players[table.getn(players) + 1] = p end
+    end
+  end
+
+  table.sort(players, function(a, b) return (a.name or "") < (b.name or "") end)
+
+  local text, skipped = ns.SimcExport.bundle(players)
+  ns.Export.show(text, skipped, table.getn(players) - table.getn(skipped))
+end
+
 local function refreshGrid()
   if not ns.Grid or not ns.Grid.isShown() then return end
   local confirmed, total, unreachable = queue:coverage(time())
@@ -391,6 +451,9 @@ SlashCmdList["RAIDINSPECTOR"] = function(msg)
     whyDump()
   elseif msg == "report" then
     report()
+  elseif msg == "simc" then
+    local ok, err = pcall(Core.exportSimc)
+    if not ok then say("|cffff4444simc export failed:|r " .. tostring(err)) end
   else
     local shown = ns.Grid.toggle()
     if shown then refreshGrid() end

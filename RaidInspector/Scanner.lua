@@ -101,6 +101,23 @@ local function harvest(unit, guid)
   record.slotsLastPass = returned
   record.scannedAt = stamp
 
+  -- Talents are only reachable while the inspect data is live. The API is
+  -- documented as sometimes needing a frame, so an empty result is retried once
+  -- before the data is cleared -- which is why ClearInspectPlayer waits.
+  local function readTalents()
+    if not C_Traits or not C_Traits.GenerateInspectImportString then return nil end
+    local ok, str = pcall(C_Traits.GenerateInspectImportString, unit)
+    if not ok or type(str) ~= "string" or str == "" then return nil end
+    return str
+  end
+
+  record.talents = readTalents()
+  if record.talents then
+    Scanner.stats.talentsRead = (Scanner.stats.talentsRead or 0) + 1
+  else
+    Scanner.stats.talentsMissing = (Scanner.stats.talentsMissing or 0) + 1
+  end
+
   if cache then cache:put(guid, record, stamp) end
   return returned
 end
@@ -154,11 +171,24 @@ local function onInspectReady(guid)
     if allSlotsConfirmed(recordFor(guid)) then
       queue:onConfirmed(guid, serverNow())
     end
-    -- Only clear after our own request, and only while Blizzard's frame is
-    -- closed: a foreign requester still needs the data we just read.
-    if not inspectFrameOpen() and ClearInspectPlayer then
-      ClearInspectPlayer()
-    end
+    -- Clearing is deferred a frame so a talent string that was not ready yet
+    -- gets one more chance while the inspect data is still live. Only clear
+    -- after our own request, and only while Blizzard's frame is closed: a
+    -- foreign requester still needs the data we just read.
+    local record = recordFor(guid)
+    C_Timer.After(0, function()
+      if not record.talents and C_Traits and C_Traits.GenerateInspectImportString then
+        local ok, str = pcall(C_Traits.GenerateInspectImportString, unit)
+        if ok and type(str) == "string" and str ~= "" then
+          record.talents = str
+          Scanner.stats.talentsRead = (Scanner.stats.talentsRead or 0) + 1
+          Scanner.stats.talentsMissing = math.max(0, (Scanner.stats.talentsMissing or 1) - 1)
+        end
+      end
+      if not inspectFrameOpen() and ClearInspectPlayer then
+        ClearInspectPlayer()
+      end
+    end)
   else
     -- Free coverage from someone else's inspect. Worth counting separately:
     -- disabling a competing addon frees budget but also removes these.
