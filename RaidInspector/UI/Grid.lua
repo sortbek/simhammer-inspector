@@ -29,7 +29,7 @@ local SLOT_NAMES = {
 local M = ns.Theme.metrics
 local C = ns.Theme.colour
 
-local frame, scroll, content, coverageText, subText, totalsText, sortButton
+local frame, content, coverageText, subText, totalsText, sortButton
 local rows = {}
 local sortMode = "issues"
 local lastEntries, lastCoverage
@@ -358,9 +358,11 @@ function Grid.refresh(entries, coverage)
     rows[i]:Hide()
   end
 
-  content:SetHeight(math.max(1, table.getn(entries) * M.rowHeight))
-
-  local visibleRows = math.min(math.max(table.getn(entries), 4), 25)
+  -- The window sizes to its content, so there is nothing to scroll. A raid caps
+  -- at thirty and thirty rows still fit a 1080p screen, which is why the scroll
+  -- frame that used to live here was dead weight taking up horizontal space.
+  local visibleRows = math.min(math.max(table.getn(entries), 4), 30)
+  content:SetHeight(math.max(1, visibleRows * M.rowHeight))
   frame:SetHeight(M.headerHeight + visibleRows * M.rowHeight + M.padding * 2)
 
   -- The build-up phase is called out explicitly. Without it the first couple of
@@ -512,7 +514,7 @@ function Grid.create()
   if frame then return frame end
 
   frame = CreateFrame("Frame", "RaidInspectorGrid", UIParent)
-  frame:SetSize(gridWidth() + M.padding * 2 + 22,
+  frame:SetSize(gridWidth() + M.padding * 2,
                 M.headerHeight + 20 * M.rowHeight + M.padding * 2)
   frame:SetPoint("CENTER")
   frame:SetMovable(true)
@@ -598,14 +600,9 @@ function Grid.create()
 
   buildHeader()
 
-  scroll = CreateFrame("ScrollFrame", "RaidInspectorGridScroll", frame,
-                       "UIPanelScrollFrameTemplate")
-  scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -M.headerHeight)
-  scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -26, M.padding)
-
-  content = CreateFrame("Frame", nil, scroll)
+  content = CreateFrame("Frame", nil, frame)
+  content:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -M.headerHeight)
   content:SetSize(gridWidth(), 1)
-  scroll:SetScrollChild(content)
 
   -- Escape closes it, the way every other WoW panel behaves.
   tinsert(UISpecialFrames, "RaidInspectorGrid")
