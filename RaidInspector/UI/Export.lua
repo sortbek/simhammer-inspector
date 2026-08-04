@@ -59,6 +59,15 @@ local function create()
   editBox:SetFontObject("ChatFontNormal")
   editBox:SetWidth(560)
   editBox:SetScript("OnEscapePressed", function() frame:Hide() end)
+
+  -- Close on copy. The hide is deferred a frame so the copy itself completes
+  -- first: hiding the box in the same frame as the keypress can take the
+  -- selection away before the client has read it.
+  editBox:SetScript("OnKeyDown", function(_, key)
+    if key == "C" and IsControlKeyDown() then
+      C_Timer.After(0, function() frame:Hide() end)
+    end
+  end)
   -- The text is read-only in intent: any edit is undone rather than blocked, so
   -- selection and copying still behave normally.
   editBox:SetScript("OnTextChanged", function(self, userInput)
@@ -75,10 +84,8 @@ function Export.show(text, skipped, exported)
 
   editBox.payload = text
   editBox:SetText(text)
-  editBox:HighlightText()
-  editBox:SetFocus()
 
-  statusText:SetText(string.format("%d profiles  \194\183  press Ctrl+C to copy", exported))
+  statusText:SetText(string.format("%d profiles  \194\183  Ctrl+C copies and closes", exported))
   if exported > 0 then
     statusText:SetTextColor(0.36, 0.74, 0.46)
   else
@@ -96,4 +103,13 @@ function Export.show(text, skipped, exported)
   end
 
   frame:Show()
+
+  -- Focus and selection only stick once the frame is actually shown, and the
+  -- scroll frame needs a frame to lay the edit box out. Doing it before Show
+  -- silently does nothing, which is why the text was not selected on open.
+  C_Timer.After(0, function()
+    if not frame:IsShown() then return end
+    editBox:SetFocus()
+    editBox:HighlightText()
+  end)
 end

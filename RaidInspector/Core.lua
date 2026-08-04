@@ -483,6 +483,11 @@ local function onLogin()
     if not ok then say("|cffff4444priority error:|r " .. tostring(err)) end
   end)
 
+  -- Far faster than the grid refresh, because it only toggles one texture per
+  -- row. An inspect lasts about a second and the grid redraws every two, so
+  -- without this the marker would usually be missed entirely.
+  C_Timer.NewTicker(0.2, function() pcall(ns.Grid.updateScanMarker) end)
+
   local _, status = dataValid()
   say(string.format("loaded %s, data %s (%s)", ns.VERSION, ns.Data.Version.version, status))
   say("use |cffffff00/ri|r for the grid, |cffffff00/ri report|r for chat output")

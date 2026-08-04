@@ -97,6 +97,14 @@ local function makeRow(index)
   row.hover:SetColorTexture(C.rowHover[1], C.rowHover[2], C.rowHover[3], C.rowHover[4])
   row.hover:Hide()
 
+  -- A single inspect takes roughly a second, so which player is being read is
+  -- worth showing: it makes the wait legible instead of looking stalled.
+  row.scanning = row:CreateTexture(nil, "ARTWORK")
+  row.scanning:SetSize(3, M.rowHeight - 4)
+  row.scanning:SetPoint("LEFT", row, "LEFT", 0, 0)
+  row.scanning:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 0.9)
+  row.scanning:Hide()
+
   -- Class and role read faster as icons than as a colour alone, and a raid
   -- leader scanning twenty rows is looking for "which healer" as often as
   -- "which name".
@@ -567,6 +575,23 @@ function Grid.create()
 
   frame:Hide()
   return frame
+end
+
+-- Touches only the scanning marker, never the row contents, so it can run far
+-- more often than the full refresh without costing anything.
+function Grid.updateScanMarker()
+  if not frame or not frame:IsShown() then return end
+  local status = ns.Scanner and ns.Scanner.status and ns.Scanner.status()
+  local scanning = status and status.pending or nil
+
+  for i = 1, table.getn(rows) do
+    local row = rows[i]
+    if row:IsShown() and row.guid and row.guid == scanning then
+      row.scanning:Show()
+    else
+      row.scanning:Hide()
+    end
+  end
 end
 
 function Grid.toggle()
