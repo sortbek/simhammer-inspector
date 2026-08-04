@@ -59,7 +59,11 @@ local function create()
 
   frame = CreateFrame("Frame", "RaidInspectorDetail", parent)
   frame:SetWidth(WIDTH + 40)
-  frame:SetPoint("TOPLEFT", parent, "TOPRIGHT", 6, 0)
+  -- Minus one so the two panel borders land on top of each other and read as a
+  -- single seam. At zero you get a two pixel double line; at anything positive
+  -- it stops looking attached and starts looking like a second window that
+  -- happens to be nearby.
+  frame:SetPoint("TOPLEFT", parent, "TOPRIGHT", -1, 0)
   frame:SetPoint("BOTTOM", parent, "BOTTOM", 0, 0)
   frame:EnableMouse(true)
   frame:SetFrameStrata("HIGH")
