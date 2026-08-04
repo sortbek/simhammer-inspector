@@ -365,6 +365,20 @@ function Grid.refresh(entries, coverage)
   content:SetHeight(math.max(1, visibleRows * M.rowHeight))
   frame:SetHeight(M.headerHeight + visibleRows * M.rowHeight + M.padding * 2)
 
+  -- Totals first: the coverage line needs to know whether anything is wrong
+  -- before it can decide what to say.
+  local players, errors, warnings, missingEmb = 0, 0, 0, 0
+  for i = 1, table.getn(entries) do
+    local e = entries[i]
+    errors = errors + e.errors
+    warnings = warnings + e.warnings
+    if e.errors > 0 or e.warnings > 0 then players = players + 1 end
+    if e.embellishments and e.embellishments.known == e.embellishments.total
+       and e.embellishments.total > 0 and e.embellishments.found < 2 then
+      missingEmb = missingEmb + 1
+    end
+  end
+
   -- The build-up phase is called out explicitly. Without it the first couple of
   -- minutes of a mostly-grey grid reads as a broken addon.
   local scanning = coverage.confirmed < coverage.total
@@ -372,12 +386,16 @@ function Grid.refresh(entries, coverage)
     coverageText:SetText("Scanning")
     coverageText:SetTextColor(0.92, 0.70, 0.18)
   else
-    coverageText:SetText(string.format("%d / %d confirmed", coverage.confirmed, coverage.total))
+    local text = string.format("%d / %d confirmed", coverage.confirmed, coverage.total)
     if scanning then
       coverageText:SetTextColor(0.92, 0.70, 0.18)
     else
       coverageText:SetTextColor(0.36, 0.74, 0.46)
+      if errors == 0 and warnings == 0 then
+        text = text .. "   \194\183   everyone is clean"
+      end
     end
+    coverageText:SetText(text)
   end
 
   -- "not answering", not "out of range": a timeout means no reply arrived, and
@@ -393,18 +411,6 @@ function Grid.refresh(entries, coverage)
 
   -- An aggregate line answers the question the grid cannot: how much work is
   -- there in total, and is it worth holding the pull for.
-  local players, errors, warnings, missingEmb = 0, 0, 0, 0
-  for i = 1, table.getn(entries) do
-    local e = entries[i]
-    errors = errors + e.errors
-    warnings = warnings + e.warnings
-    if e.errors > 0 or e.warnings > 0 then players = players + 1 end
-    if e.embellishments and e.embellishments.known == e.embellishments.total
-       and e.embellishments.total > 0 and e.embellishments.found < 2 then
-      missingEmb = missingEmb + 1
-    end
-  end
-
   local bits = {}
   if players > 0 then
     bits[table.getn(bits) + 1] = string.format("|cffe0e2e8%d|r players need attention", players)
@@ -419,8 +425,10 @@ function Grid.refresh(entries, coverage)
     bits[table.getn(bits) + 1] = string.format("|cffeab32e%d|r short on embellishments", missingEmb)
   end
 
+  -- When there is nothing wrong, the coverage line already says everything worth
+  -- saying. A second green line underneath repeating it in other words is noise.
   if table.getn(bits) == 0 then
-    totalsText:SetText("|cff5cbd76everyone is clean|r")
+    totalsText:SetText("")
   else
     totalsText:SetText(table.concat(bits, "   \194\183   "))
   end
@@ -467,10 +475,10 @@ local function buildHeader()
 
     if texture then
       icon:SetTexture(texture)
-      -- Held back so the header reads as a label rather than as content: the
-      -- cells below are what the eye should land on.
-      icon:SetDesaturated(true)
-      icon:SetAlpha(0.55)
+      -- Full colour at near-full opacity. Desaturating these at 55% made them
+      -- unreadable against a dark panel, which defeated the point of using
+      -- icons at all.
+      icon:SetAlpha(0.85)
     else
       icon:Hide()
       local fs = hit:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
@@ -481,27 +489,16 @@ local function buildHeader()
     end
 
     hit:SetScript("OnEnter", function(self)
-      icon:SetDesaturated(false)
       icon:SetAlpha(1)
       GameTooltip:SetOwner(self, "ANCHOR_TOP")
       GameTooltip:AddLine(SLOT_NAMES[slot] or ("Slot " .. slot))
       GameTooltip:Show()
     end)
     hit:SetScript("OnLeave", function()
-      icon:SetDesaturated(true)
-      icon:SetAlpha(0.55)
+      icon:SetAlpha(0.85)
       GameTooltip:Hide()
     end)
   end
-
-  -- Separates who from what: the identity columns on the left, the gear grid on
-  -- the right.
-  local split = frame:CreateTexture(nil, "ARTWORK")
-  split:SetPoint("TOPLEFT", frame, "TOPLEFT",
-                 M.padding + M.nameWidth + M.ilvlWidth + M.embWidth - 5, -M.headerHeight + 30)
-  split:SetWidth(1)
-  split:SetHeight(24)
-  split:SetColorTexture(C.divider[1], C.divider[2], C.divider[3], C.divider[4])
 
   local divider = frame:CreateTexture(nil, "ARTWORK")
   divider:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -M.headerHeight + 4)

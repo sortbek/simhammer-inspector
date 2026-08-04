@@ -24,26 +24,32 @@ Theme.colour = {
 -- Cell states carry a glyph as well as a colour. Red against green is
 -- unreadable for a meaningful share of players, so colour is never the only
 -- channel that distinguishes them.
+--
+-- "ok" is deliberately the quietest state in the palette. It is also the most
+-- common one: sixteen slots times twenty players is mostly fine, and when the
+-- default state is a saturated green the one amber cell that matters has to
+-- compete with three hundred that do not. A calm grid makes the exception
+-- obvious without needing a brighter colour for it.
 Theme.state = {
   ok = {
-    fill  = { 0.18, 0.44, 0.26, 0.85 },
-    edge  = { 0.30, 0.68, 0.40, 0.55 },
+    fill  = { 0.13, 0.24, 0.17, 0.85 },
+    edge  = { 0.24, 0.46, 0.30, 0.45 },
     glyph = "", glyphColour = { 1, 1, 1 },
   },
   warn = {
-    fill  = { 0.52, 0.38, 0.06, 0.9 },
-    edge  = { 0.92, 0.70, 0.18, 0.7 },
-    glyph = "!", glyphColour = { 1, 0.90, 0.62 },
+    fill  = { 0.55, 0.40, 0.05, 0.95 },
+    edge  = { 1.00, 0.76, 0.20, 0.85 },
+    glyph = "!", glyphColour = { 1, 0.93, 0.68 },
   },
   bad = {
-    fill  = { 0.50, 0.13, 0.15, 0.92 },
-    edge  = { 0.93, 0.31, 0.31, 0.75 },
-    glyph = "\195\151", glyphColour = { 1, 0.82, 0.82 },
+    fill  = { 0.56, 0.13, 0.15, 1 },
+    edge  = { 1.00, 0.36, 0.36, 0.9 },
+    glyph = "\195\151", glyphColour = { 1, 0.86, 0.86 },
   },
   unknown = {
-    fill  = { 0.13, 0.14, 0.17, 0.85 },
+    fill  = { 0.12, 0.13, 0.16, 0.85 },
     edge  = { 1, 1, 1, 0.05 },
-    glyph = "\194\183", glyphColour = { 0.42, 0.44, 0.50 },
+    glyph = "\194\183", glyphColour = { 0.40, 0.42, 0.48 },
   },
   empty = {
     fill  = { 0.08, 0.08, 0.10, 0.5 },
@@ -53,8 +59,11 @@ Theme.state = {
 }
 
 Theme.metrics = {
-  rowHeight    = 21,
-  cellSize     = 15,
+  rowHeight    = 23,
+  -- 15 px was too small for the paperdoll slot icons used as column heads: at
+  -- that size they were indistinguishable grey smudges. 19 makes them legible
+  -- and gives the grid room to breathe.
+  cellSize     = 19,
   cellGap      = 3,
   iconSize     = 14,
   nameWidth    = 148,
