@@ -57,6 +57,17 @@ function LinkParser.parse(link)
     end
   end
 
+  -- Two fields past the end of the modifier pairs sits another count-prefixed
+  -- list: the gem bonus IDs. SimC emits these as gem_bonus_id. The offset of two
+  -- is not derivable from the format, it is what the reference implementation
+  -- uses.
+  local gemBonusIDs = {}
+  local gemBonusIndex = modCountIndex + (2 * modCount) + 2
+  local gemBonusCount = num(f, gemBonusIndex)
+  for i = 1, gemBonusCount do
+    gemBonusIDs[i] = num(f, gemBonusIndex + i)
+  end
+
   return {
     itemID      = num(f, 1),
     enchantID   = num(f, 2),
@@ -70,5 +81,6 @@ function LinkParser.parse(link)
     itemContext = num(f, 12),
     bonusIDs    = bonusIDs,
     modifiers   = modifiers,
+    gemBonusIDs = gemBonusIDs,
   }
 end

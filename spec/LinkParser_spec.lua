@@ -102,6 +102,28 @@ describe("LinkParser bonus IDs and modifiers", function()
     assert.same({}, r.modifiers)
   end)
 
+  -- SimC emits gem_bonus_id from a count-prefixed list that sits two fields
+  -- past the end of the modifier pairs. Nothing before this reached that far
+  -- into the link.
+  it("returns an empty gem bonus list when the link has none", function()
+    local r = parser().parse(links.ringWithEnchantAndGem)
+    assert.same({}, r.gemBonusIDs)
+  end)
+
+  it("returns an empty gem bonus list on a link that ends early", function()
+    local r = parser().parse(links.minimal)
+    assert.same({}, r.gemBonusIDs)
+  end)
+
+  it("reads gem bonus IDs when present", function()
+    -- Synthetic: no captured item carried gem bonuses. Structure follows the
+    -- reference implementation -- two fields past the modifier pairs, then a
+    -- count, then that many IDs.
+    local link = "|cnIQ4:|Hitem:200000:0:0::::::90:270::6:1:1111:1:28:2462:0:2:7777:8888|h[Test]|h|r"
+    local r = parser().parse(link)
+    assert.same({ 7777, 8888 }, r.gemBonusIDs)
+  end)
+
   it("does not expose internal fields", function()
     local r = parser().parse(links.ringWithEnchantAndGem)
     assert.is_nil(r._fields)
