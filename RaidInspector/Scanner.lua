@@ -291,10 +291,24 @@ Scanner.stats = { ticks = 0, hintPasses = 0, exitPaused = 0, exitPending = 0,
 -- directly and always returns everything. Queueing yourself wastes budget and,
 -- worse, can report you as unreachable while you are standing still looking at
 -- your own character.
+-- Your own talents come from a different call than an inspected player's:
+-- GenerateInspectImportString needs inspect data, which you never have for
+-- yourself.
+local function ownTalents()
+  if not C_Traits or not C_Traits.GenerateImportString then return nil end
+  if not C_ClassTalents or not C_ClassTalents.GetActiveConfigID then return nil end
+  local configID = C_ClassTalents.GetActiveConfigID()
+  if not configID then return nil end
+  local ok, str = pcall(C_Traits.GenerateImportString, configID)
+  if not ok or type(str) ~= "string" or str == "" then return nil end
+  return str
+end
+
 function Scanner.scanSelf()
   local guid = UnitGUID("player")
   if not guid or not queue then return end
   local returned = harvest("player", guid)
+  recordFor(guid).talents = ownTalents() or recordFor(guid).talents
   queue:onSuccess(guid, returned, serverNow())
   if allSlotsConfirmed(recordFor(guid)) then
     queue:onConfirmed(guid, serverNow())
@@ -410,6 +424,33 @@ function Scanner.rescanAll()
   for guid in pairs(ns.Roster.all()) do
     queue:onInRange(guid, serverNow())
   end
+end
+
+-- Inspects whatever you have targeted and harvests it, roster or not. Exists so
+-- the export can be verified against a single known character without needing a
+-- raid: stand anywhere, target someone, compare the result.
+function Scanner.inspectTarget(onDone)
+  if not UnitExists("target") or not UnitIsPlayer("target") then
+    return false, "no player targeted"
+  end
+  if not CanInspect("target", false) then
+    return false, "cannot inspect this target"
+  end
+
+  local guid = UnitGUID("target")
+  local waiting = CreateFrame("Frame")
+  waiting:RegisterEvent("INSPECT_READY")
+  waiting:SetScript("OnEvent", function(self, _, readyGuid)
+    if readyGuid ~= guid then return end
+    self:UnregisterAllEvents()
+    self:SetScript("OnEvent", nil)
+    -- One frame of slack, the same reason the roster path defers: the talent
+    -- string is not always ready the instant the event fires.
+    C_Timer.After(0, function() onDone(guid) end)
+  end)
+
+  NotifyInspect("target")
+  return true
 end
 
 function Scanner.isPaused()

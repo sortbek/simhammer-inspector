@@ -220,8 +220,27 @@ local SIMC_SLOTS = {
 
 local SIMC_ROLE = { TANK = "tank", HEALER = "heal", DAMAGER = "attack" }
 
-local function simcPlayer(guid)
+-- Falls back to reading the unit directly, so a target that is not in your group
+-- can still be exported. That is what makes the format verifiable without a raid.
+local function playerInfo(guid, unit)
   local info = ns.Roster.get(guid)
+  if info then return info end
+  if not unit or not UnitExists(unit) then return nil end
+
+  local name, realm = UnitName(unit)
+  if not realm or realm == "" then realm = GetRealmName and GetRealmName() or nil end
+  local _, class = UnitClass(unit)
+
+  return {
+    name = name, realm = realm, class = class,
+    race = UnitRace and UnitRace(unit) or nil,
+    level = UnitLevel and UnitLevel(unit) or nil,
+    role = UnitGroupRolesAssigned and UnitGroupRolesAssigned(unit) or nil,
+  }
+end
+
+local function simcPlayer(guid, unit)
+  local info = playerInfo(guid, unit)
   local record = records[guid]
   if not info or not record then return nil end
 
@@ -253,21 +272,53 @@ function Core.region()
   return map[GetCurrentRegion and GetCurrentRegion() or 0] or "US"
 end
 
+local function showBundle(players)
+  table.sort(players, function(a, b) return (a.name or "") < (b.name or "") end)
+  local text, skipped = ns.SimcExport.bundle(players)
+  ns.Export.show(text, skipped, table.getn(players) - table.getn(skipped))
+end
+
 -- DPS only, as requested: tanks and healers are rarely simmed, and every extra
--- profile is more text to paste.
+-- profile is more text to paste. Solo, nobody has an assigned role, so you are
+-- included regardless -- otherwise the export is empty outside a group and
+-- cannot be tried at all.
 function Core.exportSimc()
   local players = {}
+  local solo = not (IsInGroup and IsInGroup())
+  local ownGuid = UnitGUID("player")
+
   for guid, info in pairs(ns.Roster.all()) do
-    if info.role == "DAMAGER" then
+    if info.role == "DAMAGER" or (solo and guid == ownGuid) then
       local p = simcPlayer(guid)
       if p then players[table.getn(players) + 1] = p end
     end
   end
 
-  table.sort(players, function(a, b) return (a.name or "") < (b.name or "") end)
+  showBundle(players)
+end
 
-  local text, skipped = ns.SimcExport.bundle(players)
-  ns.Export.show(text, skipped, table.getn(players) - table.getn(skipped))
+-- Exports whoever you have targeted. The point is verification: run this on your
+-- own character, run /simc from the SimulationCraft addon on the same character,
+-- and compare. Any difference is a defect in this addon's reading of the format.
+function Core.exportSimcTarget()
+  local ok, err = ns.Scanner.inspectTarget(function(guid)
+    local p = simcPlayer(guid, "target")
+    if not p then
+      say("|cffff4444no data captured for that target|r")
+      return
+    end
+    showBundle({ p })
+  end)
+
+  if not ok then say("|cffff4444" .. tostring(err) .. "|r") return end
+  say("inspecting target, export will open when the data lands")
+end
+
+function Core.exportSimcSelf()
+  ns.Scanner.scanSelf()
+  local p = simcPlayer(UnitGUID("player"), "player")
+  if not p then say("|cffff4444no data for yourself yet|r") return end
+  showBundle({ p })
 end
 
 local function refreshGrid()
@@ -453,6 +504,12 @@ SlashCmdList["RAIDINSPECTOR"] = function(msg)
     report()
   elseif msg == "simc" then
     local ok, err = pcall(Core.exportSimc)
+    if not ok then say("|cffff4444simc export failed:|r " .. tostring(err)) end
+  elseif msg == "simc target" then
+    local ok, err = pcall(Core.exportSimcTarget)
+    if not ok then say("|cffff4444simc export failed:|r " .. tostring(err)) end
+  elseif msg == "simc self" then
+    local ok, err = pcall(Core.exportSimcSelf)
     if not ok then say("|cffff4444simc export failed:|r " .. tostring(err)) end
   else
     local shown = ns.Grid.toggle()
