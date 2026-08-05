@@ -6,7 +6,7 @@ ns.Grid = Grid
 -- Player rows by gear-slot columns. Cells are pooled and only the row whose data
 -- just arrived is redrawn; the grid is never rebuilt per event.
 
-local SLOTS = { 1, 2, 3, 15, 5, 9, 10, 6, 7, 8, 11, 12, 13, 14, 16, 17 }
+local SLOTS = ns.Policy.Slots.ALL
 
 -- Blizzard's own inventory slot names, used to ask the client for each slot's
 -- icon. Going through GetInventorySlotInfo rather than hardcoding texture paths
@@ -19,13 +19,10 @@ local SLOT_FRAME_NAMES = {
   [17] = "SecondaryHandSlot",
 }
 
-local SLOT_NAMES = {
-  [1] = "Head", [2] = "Neck", [3] = "Shoulders", [5] = "Chest", [6] = "Waist",
-  [7] = "Legs", [8] = "Feet", [9] = "Wrist", [10] = "Hands", [11] = "Finger 1",
-  [12] = "Finger 2", [13] = "Trinket 1", [14] = "Trinket 2", [15] = "Back",
-  [16] = "Main Hand", [17] = "Off Hand",
-}
+local SLOT_NAMES = ns.Policy.Slots.NAMES
 
+local GREY = ns.Theme.severity.unknown
+local MAX_EMB = ns.Policy.Season.MAX_EMBELLISHMENTS
 local M = ns.Theme.metrics
 local C = ns.Theme.colour
 
@@ -34,6 +31,7 @@ local rows = {}
 local sortMode = "issues"
 local lastEntries, lastCoverage
 local selectedGuid
+local lastScanMarker
 
 local function gridWidth()
   return M.nameWidth + M.ilvlWidth + M.embWidth
@@ -63,15 +61,19 @@ local function makeCell(parent, index)
   cell.glyph = cell:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   cell.glyph:SetPoint("CENTER", 0, 0)
 
+  -- Built on hover, not on refresh. Composing lines for all four hundred cells
+  -- every two seconds allocated a thousand tables to display at most one.
   cell:SetScript("OnEnter", function(self)
     if self:GetParent().hover then
       self:GetParent().hover:Show()
     end
-    if not self.tooltipLines or table.getn(self.tooltipLines) == 0 then return end
+    if not self.slot then return end
+    local lines = Grid.tooltipFor(self.slot, self.info, self.state)
+    if table.getn(lines) == 0 then return end
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:AddLine(self.tooltipLines[1], 1, 1, 1)
-    for i = 2, table.getn(self.tooltipLines) do
-      local line = self.tooltipLines[i]
+    GameTooltip:AddLine(lines[1], 1, 1, 1)
+    for i = 2, table.getn(lines) do
+      local line = lines[i]
       GameTooltip:AddLine(line.text, line.r, line.g, line.b, true)
     end
     GameTooltip:Show()
@@ -211,7 +213,7 @@ local function acquireRow(index)
   return rows[index]
 end
 
-local function styleCell(cell, state, stale, lines)
+local function styleCell(cell, state, stale, slot, slotInfo)
   local style = ns.Theme.state[state] or ns.Theme.state.unknown
   local a = stale and ns.Theme.STALE_ALPHA or 1
 
@@ -219,19 +221,14 @@ local function styleCell(cell, state, stale, lines)
   cell.edge:SetColorTexture(style.edge[1], style.edge[2], style.edge[3], style.edge[4] * a)
   cell.glyph:SetText(style.glyph)
   cell.glyph:SetTextColor(style.glyphColour[1], style.glyphColour[2], style.glyphColour[3], a)
-  cell.tooltipLines = lines
+  cell.slot, cell.info, cell.state = slot, slotInfo, state
 end
 
-local SEVERITY_COLOUR = {
-  error = { 0.93, 0.31, 0.31 },
-  warn  = { 0.92, 0.70, 0.18 },
-}
-
-local function tooltipFor(slot, slotInfo, state)
+function Grid.tooltipFor(slot, slotInfo, state)
   local name = SLOT_NAMES[slot] or ("Slot " .. slot)
 
   if not slotInfo or state == "empty" then
-    return { name, { text = "nothing equipped", r = 0.5, g = 0.5, b = 0.5 } }
+    return { name, { text = "nothing equipped", r = GREY[1], g = GREY[2], b = GREY[3] } }
   end
 
   local lines = { name }
@@ -242,13 +239,12 @@ local function tooltipFor(slot, slotInfo, state)
   if slotInfo.findings and table.getn(slotInfo.findings) > 0 then
     for i = 1, table.getn(slotInfo.findings) do
       local f = slotInfo.findings[i]
-      local c = (f.state == "unknown") and { 0.45, 0.47, 0.52 }
-                or (SEVERITY_COLOUR[f.severity] or SEVERITY_COLOUR.warn)
+      local c = ns.Theme.findingColour(f)
       lines[table.getn(lines) + 1] = { text = f.detail, r = c[1], g = c[2], b = c[3] }
     end
   elseif state == "unknown" then
     lines[table.getn(lines) + 1] =
-      { text = "not scanned yet", r = 0.45, g = 0.47, b = 0.52 }
+      { text = "not scanned yet", r = GREY[1], g = GREY[2], b = GREY[3] }
   end
 
   return lines
@@ -304,15 +300,15 @@ function Grid.updateRow(index, entry)
   if not emb or emb.total == 0 then
     row.emb:SetText("--")
     ns.Theme.setText(row.emb, C.textFaint)
-  elseif emb.known < emb.total and emb.found < 2 then
+  elseif emb.known < emb.total and emb.found < MAX_EMB then
     -- Some slot could not be read, so the count is a floor rather than a total.
-    row.emb:SetText(emb.found .. "/2?")
+    row.emb:SetText(emb.found .. "/" .. MAX_EMB .. "?")
     ns.Theme.setText(row.emb, C.textFaint)
-  elseif emb.found >= 2 then
-    row.emb:SetText("2/2")
+  elseif emb.found >= MAX_EMB then
+    row.emb:SetText(MAX_EMB .. "/" .. MAX_EMB)
     row.emb:SetTextColor(0.36, 0.74, 0.46)
   else
-    row.emb:SetText(emb.found .. "/2")
+    row.emb:SetText(emb.found .. "/" .. MAX_EMB)
     row.emb:SetTextColor(0.92, 0.70, 0.18)
   end
 
@@ -320,7 +316,7 @@ function Grid.updateRow(index, entry)
     local slot = SLOTS[i]
     local slotInfo = entry.slots and entry.slots[slot]
     local state = slotInfo and slotInfo.state or "unknown"
-    styleCell(row.cells[i], state, entry.stale, tooltipFor(slot, slotInfo, state))
+    styleCell(row.cells[i], state, entry.stale, slot, slotInfo)
   end
 
   if entry.errors > 0 then
@@ -381,7 +377,7 @@ function Grid.refresh(entries, coverage)
     warnings = warnings + e.warnings
     if e.errors > 0 or e.warnings > 0 then players = players + 1 end
     if e.embellishments and e.embellishments.known == e.embellishments.total
-       and e.embellishments.total > 0 and e.embellishments.found < 2 then
+       and e.embellishments.total > 0 and e.embellishments.found < MAX_EMB then
       missingEmb = missingEmb + 1
     end
   end
@@ -623,8 +619,11 @@ end
 -- more often than the full refresh without costing anything.
 function Grid.updateScanMarker()
   if not frame or not frame:IsShown() then return end
-  local status = ns.Scanner and ns.Scanner.status and ns.Scanner.status()
-  local scanning = status and status.pending or nil
+  local scanning = ns.Scanner and ns.Scanner.pendingGuid and ns.Scanner.pendingGuid() or nil
+
+  -- Most ticks change nothing, so bail before touching thirty rows.
+  if scanning == lastScanMarker then return end
+  lastScanMarker = scanning
 
   for i = 1, table.getn(rows) do
     local row = rows[i]
@@ -669,11 +668,9 @@ function Grid.selectPlayer(guid)
     ns.Detail.hide()
   else
     selectedGuid = guid
-    ns.Detail.show(guid)
   end
+  -- The refresh drives the panel (see the Detail.show call inside it), so
+  -- showing it here as well made every click pay for two full rebuilds.
   if lastEntries then Grid.refresh(lastEntries, lastCoverage) end
 end
 
-function Grid.selectedPlayer()
-  return selectedGuid
-end

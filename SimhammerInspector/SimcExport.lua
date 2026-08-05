@@ -25,19 +25,12 @@ local MOD_REDIRECTED_BASE_STATS = 64
 -- produces a server= line SimC will not match.
 function SimcExport.tokenize(text)
   if type(text) ~= "string" then return "" end
-
   local lowered = string.gsub(string.lower(text), " ", "_")
-
-  local out = {}
-  for i = 1, string.len(lowered) do
-    local b = string.byte(lowered, i)
-    local keep = (b >= 48 and b <= 57)   -- 0-9
-              or (b >= 97 and b <= 122)  -- a-z
-              or b == 95                 -- _
-    if keep then out[table.getn(out) + 1] = string.sub(lowered, i, i) end
-  end
-
-  return table.concat(out)
+  -- A complement class, not an enumeration: it discards every byte outside the
+  -- set by construction, so there is no list of accented characters to keep up
+  -- with. That distinction is what makes this safe where a pattern listing the
+  -- characters you happened to think of would not be.
+  return (string.gsub(lowered, "[^a-z0-9_]", ""))
 end
 
 function SimcExport.itemLine(simcSlot, parsed)

@@ -10,50 +10,57 @@ Core.config = {
   staleSeconds     = 7200,
   pruneSeconds     = 2592000,
   minInterval      = 10,
-  reconfirmSeconds = 600,
 }
 
 local QUEUE_CONFIG = {
-  timeoutSeconds       = 3,
   backoffBase          = 5,
   backoffCeiling       = 60,
-  retryCap             = 3,
   -- Raised from 5. A timeout is weak evidence: with the inspect budget shared
   -- across addons, a dropped request looks exactly like an absent player. Five
   -- of them was enough to write off eight raiders who were standing next to us.
   unreachableAfter     = 10,
-  reprobeSeconds       = 60,
   reconfirmSeconds     = 600,
   substantialPassSlots = 10,
 }
 
-local SLOT_NAMES = {
-  [1] = "Head", [2] = "Neck", [3] = "Shoulders", [5] = "Chest", [6] = "Waist",
-  [7] = "Legs", [8] = "Feet", [9] = "Wrist", [10] = "Hands", [11] = "Finger 1",
-  [12] = "Finger 2", [13] = "Trinket 1", [14] = "Trinket 2", [15] = "Back",
-  [16] = "Main Hand", [17] = "Off Hand",
-}
-
 local queue, cache
 local records = {}
+
+-- Session constants, resolved once at login. dataValid depends on GetBuildInfo
+-- and the generated data stamp, neither of which can change without a client
+-- restart -- it was being recomputed once per player on every 2 s refresh.
+local sharedContext, dataStatus
+
+-- GUIDs are what the queue reports; names are what a raid leader reads.
+local function namesFor(guids)
+  local names = {}
+  for i = 1, table.getn(guids) do
+    local info = ns.Roster.get(guids[i])
+    names[i] = info and info.name or guids[i]
+  end
+  return names
+end
 
 local function say(msg)
   DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99Simhammer|r " .. msg)
 end
 
 -- Derived values are never persisted, so the validity of the generated data is
--- decided fresh every session against the running client.
-local function dataValid()
+-- decided fresh every session against the running client -- once, at login.
+local function resolveDataStatus()
   local version, _, _, interface = GetBuildInfo()
-  local build = tostring(interface)
-  local status = ns.DataVersion.compare(ns.Data.Version,
-                                        { version = version, build = build })
-  return ns.DataVersion.isValid(status), status
+  dataStatus = ns.DataVersion.compare(ns.Data.Version,
+                                      { version = version, build = tostring(interface) })
+  sharedContext = {
+    minInterval = Core.config.minInterval,
+    dataValid = ns.DataVersion.isValid(dataStatus),
+  }
 end
 
+-- One shared immutable table rather than a fresh one per player per refresh.
+-- Rules never mutates it.
 local function context()
-  local valid = dataValid()
-  return { minInterval = Core.config.minInterval, dataValid = valid }
+  return sharedContext
 end
 
 local function findingsFor(guid)
@@ -78,9 +85,9 @@ local function findingsFor(guid)
   return ns.Rules.evaluatePlayer(slots, context())
 end
 
-local ALL_SLOTS = { 1, 2, 3, 15, 5, 9, 10, 6, 7, 8, 11, 12, 13, 14, 16, 17 }
+local ALL_SLOTS = ns.Policy.Slots.ALL
+local SLOT_NAMES = ns.Policy.Slots.NAMES
 
--- Worst state wins per slot: an error outranks a warning outranks unknown.
 local function worstState(findings)
   local seen = nil
   for i = 1, table.getn(findings) do
@@ -140,6 +147,7 @@ function Core.entryFor(guid)
   end
 
   local total, counted = 0, 0
+  local embFound, embKnown, embTotal = 0, 0, 0
   for i = 1, table.getn(ALL_SLOTS) do
     local slot = ALL_SLOTS[i]
     local slotRecord = record.slots[slot]
@@ -148,54 +156,39 @@ function Core.entryFor(guid)
     if not slotRecord then
       entry.slots[slot] = { state = "unknown", findings = {} }
     else
-      local link = slotRecord.itemLink
-      local itemName = link and string.match(link, "%|h%[(.-)%]%|h") or nil
-      -- Strip the inline texture escapes crafted items carry in their name, so
-      -- the detail panel shows a name rather than a name plus markup.
-      if itemName then itemName = string.gsub(itemName, "%s*|A.-|a", "") end
-
-      local icon, quality
-      if link and C_Item and C_Item.GetItemInfoInstant then
-        local _, _, _, _, iconID = C_Item.GetItemInfoInstant(link)
-        icon = iconID
-      end
-      if link and C_Item and C_Item.GetItemInfo then
-        quality = select(3, C_Item.GetItemInfo(link))
-      end
-
+      -- Name, icon and quality now come off the item record, computed once at
+      -- harvest instead of re-derived from the link on every render pass.
+      local item = slotRecord.item
       entry.slots[slot] = {
         state = worstState(slotFindings),
         findings = slotFindings,
-        itemName = itemName,
-        icon = icon,
-        quality = quality,
-        ilvl = slotRecord.item and slotRecord.item.ilvl or nil,
+        itemName = item and item.name or nil,
+        icon = item and item.icon or nil,
+        quality = item and item.quality or nil,
+        ilvl = item and item.ilvl or nil,
       }
-      if slotRecord.item and slotRecord.item.ilvl then
-        total = total + slotRecord.item.ilvl
+
+      if item and item.ilvl then
+        total = total + item.ilvl
         counted = counted + 1
+      end
+
+      -- Folded into the main pass rather than a third loop over the same slots.
+      -- Surfaced explicitly because the embellishment check goes silent when any
+      -- slot's status is unreadable, and a silent check is indistinguishable
+      -- from a passing one.
+      if item and item.parsed then
+        embTotal = embTotal + 1
+        if item.embellished ~= nil then
+          embKnown = embKnown + 1
+          if item.embellished then embFound = embFound + 1 end
+        end
       end
     end
   end
 
   entry.playerFindings = bySlot.player or {}
   if counted > 0 then entry.ilvl = total / counted end
-
-  -- Surfaced explicitly because the embellishment check goes silent when any
-  -- slot's status is unreadable, and a silent check is indistinguishable from a
-  -- passing one. This says which of the two it is.
-  local embFound, embKnown, embTotal = 0, 0, 0
-  for i = 1, table.getn(ALL_SLOTS) do
-    local slotRecord = record.slots[ALL_SLOTS[i]]
-    if slotRecord and slotRecord.item and slotRecord.item.parsed then
-      embTotal = embTotal + 1
-      local e = slotRecord.item.embellished
-      if e ~= nil then
-        embKnown = embKnown + 1
-        if e then embFound = embFound + 1 end
-      end
-    end
-  end
   entry.embellishments = { found = embFound, known = embKnown, total = embTotal }
 
   return entry
@@ -209,14 +202,6 @@ function Core.entries()
   end
   return out
 end
-
--- SimC slot keys, in the same order as ALL_SLOTS. The reference implementation
--- uses exactly this ordering, so no translation table is needed beyond the names.
-local SIMC_SLOTS = {
-  "head", "neck", "shoulder", "back", "chest", "wrist", "hands", "waist",
-  "legs", "feet", "finger1", "finger2", "trinket1", "trinket2",
-  "main_hand", "off_hand",
-}
 
 local SIMC_ROLE = { TANK = "tank", HEALER = "heal", DAMAGER = "attack" }
 
@@ -249,7 +234,7 @@ local function simcPlayer(guid, unit)
     local slotRecord = record.slots[ALL_SLOTS[i]]
     if slotRecord and slotRecord.item and slotRecord.item.parsed then
       slots[table.getn(slots) + 1] = {
-        simcSlot = SIMC_SLOTS[i],
+        simcSlot = ns.Policy.Slots.SIMC[ALL_SLOTS[i]],
         parsed = slotRecord.item.parsed,
       }
     end
@@ -267,9 +252,10 @@ local function simcPlayer(guid, unit)
   }
 end
 
+local REGIONS = { [1] = "US", [2] = "KR", [3] = "EU", [4] = "TW", [5] = "CN" }
+
 function Core.region()
-  local map = { [1] = "US", [2] = "KR", [3] = "EU", [4] = "TW", [5] = "CN" }
-  return map[GetCurrentRegion and GetCurrentRegion() or 0] or "US"
+  return REGIONS[GetCurrentRegion and GetCurrentRegion() or 0] or "US"
 end
 
 -- Throws away everything collected and starts over. Not destructive in any
@@ -389,11 +375,7 @@ end
 local function refreshGrid()
   if not ns.Grid or not ns.Grid.isShown() then return end
   local confirmed, total, unreachable = queue:coverage(time())
-  local names = {}
-  for i = 1, table.getn(unreachable) do
-    local info = ns.Roster.get(unreachable[i])
-    names[i] = info and info.name or unreachable[i]
-  end
+  local names = namesFor(unreachable)
   ns.Grid.refresh(Core.entries(),
                   { confirmed = confirmed, total = total, unreachableNames = names })
 end
@@ -403,15 +385,11 @@ function Core.reportToChat()
   say(string.format("coverage: %d/%d confirmed", confirmed, total))
 
   if table.getn(unreachable) > 0 then
-    local names = {}
-    for i = 1, table.getn(unreachable) do
-      local info = ns.Roster.get(unreachable[i])
-      names[i] = info and info.name or unreachable[i]
-    end
+    local names = namesFor(unreachable)
     say("not answering: " .. table.concat(names, ", "))
   end
 
-  local valid, status = dataValid()
+  local valid, status = sharedContext.dataValid, dataStatus
   if not valid then
     say("|cffff8800data is older than the running patch; checks degraded to unknown|r")
   elseif status == "newer-build" then
@@ -461,8 +439,10 @@ local function debugDump()
       s.requests, s.answered, rate, s.timedOut, s.harvestedForeign))
   say(string.format("  exits: paused=%d pending=%d budget=%d noCandidate=%d",
       s.exitPaused, s.exitPending, s.exitBudget, s.exitNoCandidate))
-  say(string.format("  INSPECT_READY events=%d tokenResolveFailed=%d via=%s",
-      s.inspectReadyEvents, s.tokenResolveFailed, tostring(s.resolvedVia)))
+  -- Events received is the sum of answered, foreign harvests and resolve
+  -- failures, so it was a fourth number restating the other three.
+  say(string.format("  tokenResolveFailed=%d via=%s",
+      s.tokenResolveFailed, tostring(s.resolvedVia)))
   if s.selfError then
     say("  |cffff4444self scan error:|r " .. s.selfError)
   else
@@ -491,6 +471,7 @@ local function debugDump()
 end
 
 local function onLogin()
+  resolveDataStatus()
   cache = ns.Cache.new(SimhammerInspectorDB, Core.config)
   cache:migrate()
   cache:prune(time())
@@ -523,8 +504,8 @@ local function onLogin()
   -- without this the marker would usually be missed entirely.
   C_Timer.NewTicker(0.2, function() pcall(ns.Grid.updateScanMarker) end)
 
-  local _, status = dataValid()
-  say(string.format("loaded %s, data %s (%s)", ns.VERSION, ns.Data.Version.version, status))
+  say(string.format("loaded %s, data %s (%s)",
+      ns.VERSION, ns.Data.Version.version, dataStatus))
   say("use |cffffff00/sh|r for the grid, |cffffff00/sh report|r for chat output")
 end
 

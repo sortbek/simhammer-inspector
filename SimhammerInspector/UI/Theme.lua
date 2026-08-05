@@ -51,12 +51,35 @@ Theme.state = {
     edge  = { 1, 1, 1, 0.05 },
     glyph = "\194\183", glyphColour = { 0.40, 0.42, 0.48 },
   },
-  empty = {
-    fill  = { 0.08, 0.08, 0.10, 0.5 },
-    edge  = { 1, 1, 1, 0.02 },
-    glyph = "", glyphColour = { 0.3, 0.3, 0.3 },
-  },
 }
+
+-- Severity colours for text, as distinct from the cell fills above. These were
+-- typed out inline in ten places across Grid and Detail and had already drifted:
+-- the "unknown" grey existed as three slightly different triples. One table, one
+-- answer.
+Theme.severity = {
+  error   = { 0.93, 0.31, 0.31 },
+  warn    = { 0.92, 0.70, 0.18 },
+  ok      = { 0.36, 0.74, 0.46 },
+  unknown = { 0.42, 0.44, 0.50 },
+}
+
+-- The colour a finding should be drawn in. An unknown finding is grey whatever
+-- its severity, because severity describes how bad it would be if confirmed, not
+-- how confident we are.
+function Theme.findingColour(finding)
+  if finding.state == "unknown" then return Theme.severity.unknown end
+  return Theme.severity[finding.severity] or Theme.severity.warn
+end
+
+-- Same colours as WoW escape codes, derived rather than transcribed so the chat
+-- report cannot drift from the grid.
+function Theme.hex(colour)
+  return string.format("|cff%02x%02x%02x",
+                       math.floor(colour[1] * 255 + 0.5),
+                       math.floor(colour[2] * 255 + 0.5),
+                       math.floor(colour[3] * 255 + 0.5))
+end
 
 Theme.metrics = {
   rowHeight    = 23,
@@ -91,9 +114,9 @@ Theme.quality = {
 }
 
 Theme.role = {
-  TANK    = { 0, 0.25, 0.25, 0.5,  label = "T" },
-  HEALER  = { 0.25, 0.5, 0, 0.25,  label = "H" },
-  DAMAGER = { 0.25, 0.5, 0.25, 0.5, label = "D" },
+  TANK    = { 0, 0.25, 0.25, 0.5 },
+  HEALER  = { 0.25, 0.5, 0, 0.25 },
+  DAMAGER = { 0.25, 0.5, 0.25, 0.5 },
 }
 
 Theme.STALE_ALPHA = 0.38

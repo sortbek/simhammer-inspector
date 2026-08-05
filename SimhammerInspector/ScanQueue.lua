@@ -20,10 +20,8 @@ function Queue:addPlayer(guid, now)
     state = "unseen",
     inRange = false,
     timeoutStreak = 0,
-    retriesThisPass = 0,
     backoff = 0,
     nextEligibleAt = now,
-    lastSuccessAt = nil,
     confirmedAt = nil,
   }
 end
@@ -37,7 +35,6 @@ function Queue:onTimeout(guid, now)
   if not p then return end
 
   p.timeoutStreak = p.timeoutStreak + 1
-  p.retriesThisPass = p.retriesThisPass + 1
 
   -- Exponential backoff from a stated base. Without a base an implementer has to
   -- invent one, and the schedule silently differs from the spec.
@@ -58,7 +55,6 @@ function Queue:onSuccess(guid, slotsReturned, now)
   if not p then return end
 
   p.timeoutStreak = 0
-  p.retriesThisPass = 0
   p.backoff = 0
   p.nextEligibleAt = now
 
@@ -66,7 +62,6 @@ function Queue:onSuccess(guid, slotsReturned, now)
   -- it is not enough to advance the state. The spike measured passes returning
   -- anywhere from 2 to 15 of 16 slots.
   if slotsReturned >= self.config.substantialPassSlots then
-    p.lastSuccessAt = now
     if p.state ~= "confirmed" then p.state = "partial" end
   end
 end
@@ -173,7 +168,6 @@ function Queue:debugInfo(guid, now)
     inRange        = p.inRange,
     eligible       = self:isEligible(guid, now),
     waitSeconds    = p.nextEligibleAt and math.max(0, p.nextEligibleAt - now) or 0,
-    timeoutStreak  = p.timeoutStreak,
   }
 end
 

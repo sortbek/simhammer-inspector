@@ -20,12 +20,35 @@ local function stateFor(slotRecord, sources, context)
   return "unknown"
 end
 
+-- Hoisted: these were fresh table literals on every finding, on every slot, on
+-- every player, on every refresh. isConfirmed only reads them.
+local LINK = { "linkComplete" }
+local LINK_AND_SOCKETS = { "linkComplete", "socketsKnown" }
+local TOOLTIP = { "tooltipComplete" }
+local ITEM_LOADED = { "itemLoaded" }
+local SOCKETS = { "socketsKnown" }
+
+-- Enchants and gems are ranked identically: wrong season beats wrong quality,
+-- both are warnings, both need the same evidence. Only the noun differs, and
+-- keeping one copy is what guarantees they stay in step about what "gold" means.
+local function checkTierAndQuality(findings, slot, info, noun, slotRecord, context)
+  if info.tier ~= ns.Policy.Season.CURRENT_TIER then
+    add(findings, slot, "outdated_" .. noun, "warn",
+        stateFor(slotRecord, LINK, context),
+        noun .. " from " .. info.tier)
+  elseif info.quality ~= "gold" then
+    add(findings, slot, "low_" .. noun, "warn",
+        stateFor(slotRecord, LINK, context),
+        noun .. " is " .. info.quality .. " instead of gold")
+  end
+end
+
 local function checkEnchant(findings, slot, parsed, slotRecord, context)
   if not ns.Policy.Slots.isEnchantable(slot, context.itemSubclass) then return end
 
   if parsed.enchantID == 0 then
     add(findings, slot, "missing_enchant", "error",
-        stateFor(slotRecord, { "linkComplete" }, context),
+        stateFor(slotRecord, LINK, context),
         "no enchant on an enchantable slot")
     return
   end
@@ -41,15 +64,7 @@ local function checkEnchant(findings, slot, parsed, slotRecord, context)
   -- outdated is a false accusation. Silence is the only honest answer.
   if not info.quality then return end
 
-  if info.tier ~= ns.Policy.Season.CURRENT_TIER then
-    add(findings, slot, "outdated_enchant", "warn",
-        stateFor(slotRecord, { "linkComplete" }, context),
-        "enchant from " .. info.tier)
-  elseif info.quality ~= "gold" then
-    add(findings, slot, "low_enchant", "warn",
-        stateFor(slotRecord, { "linkComplete" }, context),
-        "enchant is " .. info.quality .. " instead of gold")
-  end
+  checkTierAndQuality(findings, slot, info, "enchant", slotRecord, context)
 end
 
 local function checkGems(findings, slot, parsed, slotRecord, context)
@@ -60,15 +75,7 @@ local function checkGems(findings, slot, parsed, slotRecord, context)
     if gemID ~= 0 then
       local info = ns.Data.Gems[gemID]
       if info then
-        if info.tier ~= ns.Policy.Season.CURRENT_TIER then
-          add(findings, slot, "outdated_gem", "warn",
-              stateFor(slotRecord, { "linkComplete" }, context),
-              "gem from " .. info.tier)
-        elseif info.quality ~= "gold" then
-          add(findings, slot, "low_gem", "warn",
-              stateFor(slotRecord, { "linkComplete" }, context),
-              "gem is " .. info.quality .. " instead of gold")
-        end
+        checkTierAndQuality(findings, slot, info, "gem", slotRecord, context)
       end
     end
   end
@@ -83,7 +90,7 @@ local function checkUpgrade(findings, slot, upgrade, slotRecord, context)
 
   if upgrade.rank < upgrade.max then
     add(findings, slot, "upgrades_left", "warn",
-        stateFor(slotRecord, { "tooltipComplete" }, context),
+        stateFor(slotRecord, TOOLTIP, context),
         upgrade.rank .. "/" .. upgrade.max .. " " .. tostring(upgrade.track))
   end
 end
@@ -103,7 +110,7 @@ local function checkSockets(findings, slot, item, slotRecord, context)
     local empty = socketCount - (item.parsed.gemCount or 0)
     if empty > 0 then
       add(findings, slot, "empty_socket", "error",
-          stateFor(slotRecord, { "linkComplete", "socketsKnown" }, context),
+          stateFor(slotRecord, LINK_AND_SOCKETS, context),
           empty .. " of " .. socketCount .. " sockets empty")
     end
     return
@@ -111,7 +118,7 @@ local function checkSockets(findings, slot, item, slotRecord, context)
 
   if ns.Policy.Slots.isSocketable(slot) then
     add(findings, slot, "missing_socket", "warn",
-        stateFor(slotRecord, { "socketsKnown" }, context),
+        stateFor(slotRecord, SOCKETS, context),
         "this slot can take a socket but has none")
   end
 end
@@ -128,7 +135,7 @@ function Rules.evaluateSlot(slot, item, slotRecord, context)
     local isEmptyOffhandWithTwoHander = (slot == 17 and context.twoHanded)
     if not isEmptyOffhandWithTwoHander then
       add(findings, slot, "missing_item", "error",
-          stateFor(slotRecord, { "itemLoaded" }, context),
+          stateFor(slotRecord, ITEM_LOADED, context),
           "no item in this slot")
     end
     return findings
@@ -146,9 +153,7 @@ end
 -- you can only say someone wears 3 of 5 tier pieces once all five slots are in.
 local function countTierPieces(slots)
   local setIDs = ns.Policy.Season.TIER_SET_IDS
-  local known = false
-  for _ in pairs(setIDs) do known = true; break end
-  if not known then return nil end
+  if not next(setIDs) then return nil end
 
   local tierSlots = ns.Policy.Slots.TIER
   local worn = 0

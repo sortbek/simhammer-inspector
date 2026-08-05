@@ -87,14 +87,30 @@ function Hydrator.build(link)
   local p = pattern()
   local upgrade = (lines and p) and ns.UpgradeTrackAdapter.parse(lines, p) or nil
 
-  local setID = nil
-  local ilvl = nil
+  -- One GetItemInfo call, not one per value: name is return 1, quality is 3 and
+  -- setID is 16. These used to be re-derived from the link on every 2 s render
+  -- pass -- four hundred API calls a second for values that only change when the
+  -- link does, which is at harvest.
+  local name, quality, setID
   if C_Item and C_Item.GetItemInfo then
+    local n, _, q = C_Item.GetItemInfo(link)
+    name, quality = n, q
     setID = select(16, C_Item.GetItemInfo(link))
   end
+
+  local icon
+  if C_Item and C_Item.GetItemInfoInstant then
+    icon = select(5, C_Item.GetItemInfoInstant(link))
+  end
+
+  local ilvl = nil
   if C_Item and C_Item.GetDetailedItemLevelInfo then
     ilvl = C_Item.GetDetailedItemLevelInfo(link)
   end
+
+  -- Crafted items carry inline texture escapes in their name; strip them so
+  -- consumers get a name rather than a name plus markup.
+  if name then name = string.gsub(name, "%s*|A.-|a", "") end
 
   local item = {
     parsed      = parsed,
@@ -103,6 +119,9 @@ function Hydrator.build(link)
     setID       = setID,
     ilvl        = ilvl,
     embellished = isEmbellished(lines),
+    name        = name,
+    icon        = icon,
+    quality     = quality,
   }
 
   local evidence = {

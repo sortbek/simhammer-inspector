@@ -7,7 +7,7 @@ ns.Scanner = Scanner
 -- here is plumbing around an API that is throttled, shared with other addons,
 -- and only valid inside the handler that delivered it.
 
-local SLOTS = { 1, 2, 3, 15, 5, 9, 10, 6, 7, 8, 11, 12, 13, 14, 16, 17 }
+local SLOTS = ns.Policy.Slots.ALL
 
 Scanner.config = {
   -- The server allows roughly 6 requests per 10 s and that budget is shared
@@ -26,7 +26,13 @@ Scanner.config = {
   -- more attempts per minute at negligible risk.
   timeoutSeconds = 2,
   tickSeconds    = 1,
+  -- Owned here rather than reached for from Core. Scanner already takes its
+  -- other dependencies by injection; this was the one upward reference, and it
+  -- only worked because it sat inside a function body.
+  minInterval    = 10,
 }
+
+local LINK_SOURCES = { "linkComplete" }
 
 local queue, cache, records
 local requestTimes = {}
@@ -40,14 +46,18 @@ local function serverNow() return time() end
 -- Budget accounting is a sliding window rather than a fixed tick, because the
 -- server throttle is measured over a window and the penalty for exceeding it is
 -- a silently dropped request rather than an error.
-local function budgetAvailable()
+local function budgetUsed()
   local cutoff = now() - Scanner.config.budgetWindow
   local kept = {}
   for i = 1, table.getn(requestTimes) do
     if requestTimes[i] > cutoff then kept[table.getn(kept) + 1] = requestTimes[i] end
   end
   requestTimes = kept
-  return table.getn(requestTimes) < Scanner.config.budgetRequests
+  return table.getn(requestTimes)
+end
+
+local function budgetAvailable()
+  return budgetUsed() < Scanner.config.budgetRequests
 end
 
 local function inspectFrameOpen()
@@ -91,7 +101,6 @@ local function harvest(unit, guid)
           if not current or current.itemLink ~= link then return end
           ns.Evidence.record(current, link, rebuiltEvidence, serverNow())
           current.item = rebuilt
-          Scanner.stats.rehydrated = (Scanner.stats.rehydrated or 0) + 1
         end)
       end
     end
@@ -112,11 +121,6 @@ local function harvest(unit, guid)
   end
 
   record.talents = readTalents()
-  if record.talents then
-    Scanner.stats.talentsRead = (Scanner.stats.talentsRead or 0) + 1
-  else
-    Scanner.stats.talentsMissing = (Scanner.stats.talentsMissing or 0) + 1
-  end
 
   if cache then cache:put(guid, record, stamp) end
   return returned
@@ -126,7 +130,7 @@ local function allSlotsConfirmed(record)
   local confirmed, seen = 0, 0
   for _, slotRecord in pairs(record.slots) do
     seen = seen + 1
-    if ns.Evidence.isConfirmed(slotRecord, { "linkComplete" }, ns.Core.config.minInterval) then
+    if ns.Evidence.isConfirmed(slotRecord, LINK_SOURCES, Scanner.config.minInterval) then
       confirmed = confirmed + 1
     end
   end
@@ -150,7 +154,6 @@ local function resolveUnit(guid)
 end
 
 local function onInspectReady(guid)
-  Scanner.stats.inspectReadyEvents = Scanner.stats.inspectReadyEvents + 1
 
   local unit, how = resolveUnit(guid)
   if not unit then
@@ -181,8 +184,6 @@ local function onInspectReady(guid)
         local ok, str = pcall(C_Traits.GenerateInspectImportString, unit)
         if ok and type(str) == "string" and str ~= "" then
           record.talents = str
-          Scanner.stats.talentsRead = (Scanner.stats.talentsRead or 0) + 1
-          Scanner.stats.talentsMissing = math.max(0, (Scanner.stats.talentsMissing or 1) - 1)
         end
       end
       if not inspectFrameOpen() and ClearInspectPlayer then
@@ -201,18 +202,19 @@ end
 -- attributed. Collapsing them into one boolean expression made a live raid
 -- report "range=false" for twenty players with no way to tell which check said
 -- no.
--- Every API call is made through pcall and records its own outcome. A live raid
--- showed 76 ticks entering this function and none leaving it, with no visible
--- error: BugGrabber was capturing them and no display addon was installed. One
--- unavailable or renamed API silently killed the entire scanner every second.
--- Guessing which one wastes a raid night; measuring costs nothing.
--- Patch 12.0 introduced "secret" values: an insecure addon may hold one but may
+-- Every API call goes through pcall and records its own outcome, so a failing\r\n-- prefilter can be attributed to a specific call rather than guessed at.\r\n-- Patch 12.0 introduced "secret" values: an insecure addon may hold one but may
 -- not branch on it. UnitInRange now returns such a value, and evaluating it
 -- throws "attempt to perform boolean test on a secret boolean value". Coercion
 -- therefore happens through pcall, and a value that cannot be tested comes back
 -- as nil meaning "unknowable" rather than as false.
+-- A file-scope function, not a closure per call: this used to allocate one
+-- closure for every API result on every tick.
+local function coerce(value)
+  return value and true or false
+end
+
 local function toBool(value)
-  local ok, result = pcall(function() return value and true or false end)
+  local ok, result = pcall(coerce, value)
   if ok then return result end
   return nil
 end
@@ -270,7 +272,6 @@ local function updateRangeHints()
   local passes = 0
   for guid, info in pairs(ns.Roster.all()) do
     local p = Scanner.probe(info.unit)
-    info.probe = p
     local ok = passesPrefilter(p)
     if ok then passes = passes + 1 end
     queue:setRangeHint(guid, ok)
@@ -284,7 +285,7 @@ end
 Scanner.stats = { ticks = 0, hintPasses = 0, exitPaused = 0, exitPending = 0,
                   exitBudget = 0, exitNoCandidate = 0, requests = 0,
                   answered = 0, timedOut = 0, harvestedForeign = 0,
-                  inspectReadyEvents = 0, tokenResolveFailed = 0,
+                  tokenResolveFailed = 0,
                   resolvedVia = nil, selfSlots = nil, selfError = nil }
 
 -- Your own gear never needs an inspect: GetInventoryItemLink works on "player"
@@ -365,7 +366,6 @@ local function tick()
     return
   end
 
-  -- Never spend an inspect on yourself; read it directly instead.
   if guid == UnitGUID("player") then
     Scanner.scanSelf()
     return
@@ -469,17 +469,18 @@ function Scanner.isPaused()
   return paused or inspectFrameOpen()
 end
 
+-- The scan marker polls five times a second and wants only this. Scanner.status
+-- allocates a table and walks the budget window, none of which the marker reads.
+function Scanner.pendingGuid()
+  return pending and pending.guid or nil
+end
+
 function Scanner.status()
   local pausedBy = nil
   if paused then pausedBy = "combat or encounter" end
   if inspectFrameOpen() then pausedBy = "Blizzard inspect window is open" end
 
-  -- Recompute the window so the reported figure matches what tick() will see.
-  local cutoff = now() - Scanner.config.budgetWindow
-  local used = 0
-  for i = 1, table.getn(requestTimes) do
-    if requestTimes[i] > cutoff then used = used + 1 end
-  end
+  local used = budgetUsed()
 
   return {
     paused     = Scanner.isPaused(),

@@ -3,16 +3,12 @@ local addonName, ns = ...
 local Detail = {}
 ns.Detail = Detail
 
-local SLOT_ORDER = { 1, 2, 3, 15, 5, 9, 10, 6, 7, 8, 11, 12, 13, 14, 16, 17 }
+local SLOT_ORDER = ns.Policy.Slots.ALL
 
-local SLOT_NAMES = {
-  [1] = "Head", [2] = "Neck", [3] = "Shoulders", [5] = "Chest", [6] = "Waist",
-  [7] = "Legs", [8] = "Feet", [9] = "Wrist", [10] = "Hands", [11] = "Finger 1",
-  [12] = "Finger 2", [13] = "Trinket 1", [14] = "Trinket 2", [15] = "Back",
-  [16] = "Main Hand", [17] = "Off Hand",
-}
+local SLOT_NAMES = ns.Policy.Slots.NAMES
 
 local C = ns.Theme.colour
+local MAX_EMB = ns.Policy.Season.MAX_EMBELLISHMENTS
 local ROW_H = 15
 local WIDTH = 330
 
@@ -102,11 +98,6 @@ local function create()
   frame:Hide()
 end
 
-local SEVERITY = {
-  error = { 0.93, 0.31, 0.31 },
-  warn  = { 0.92, 0.70, 0.18 },
-}
-
 function Detail.show(guid)
   if not guid then Detail.hide() return end
   create()
@@ -128,10 +119,10 @@ function Detail.show(guid)
   local embText = "embellishments unknown"
   if emb then
     if emb.known < emb.total then
-      embText = string.format("embellishments %d of 2  (%d/%d slots readable)",
-                              emb.found, emb.known, emb.total)
+      embText = string.format("embellishments %d of %d  (%d/%d slots readable)",
+                              emb.found, MAX_EMB, emb.known, emb.total)
     else
-      embText = string.format("embellishments %d of 2", emb.found)
+      embText = string.format("embellishments %d of %d", emb.found, MAX_EMB)
     end
   end
 
@@ -188,8 +179,7 @@ function Detail.show(guid)
     -- Unknown findings appear here, unlike in the chat report: this view is
     -- opened deliberately to understand one player, so "we do not know yet" is
     -- useful rather than noise.
-    local c = (f.state == "unknown") and { 0.42, 0.44, 0.50 }
-              or (SEVERITY[f.severity] or SEVERITY.warn)
+    local c = ns.Theme.findingColour(f)
     it.label:SetText("\226\128\162  " .. f.detail)
     it.label:SetTextColor(c[1], c[2], c[3])
   end

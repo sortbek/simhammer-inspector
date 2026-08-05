@@ -18,12 +18,6 @@ function Roster.onRemoved(fn) listeners.removed[table.getn(listeners.removed) + 
 function Roster.get(guid) return members[guid] end
 function Roster.all() return members end
 
-function Roster.count()
-  local n = 0
-  for _ in pairs(members) do n = n + 1 end
-  return n
-end
-
 -- Unit tokens shift as people join and leave, so the token is refreshed on every
 -- roster update and never cached beyond it. The GUID is the stable identity.
 local function unitTokens()
