@@ -363,6 +363,22 @@ describe("Rules empty slot", function()
     assert.is_nil(findingOfKind(ns.Rules.evaluatePlayer(slots, CONTEXT), "missing_item"))
   end)
 
+  -- Returning no findings at all made the cell render as "ok" -- styled exactly
+  -- like an item that passed every check. A correctly empty slot is settled, but
+  -- it is not a slot whose contents were verified, and the grid has to be able
+  -- to show the difference.
+  it("marks a correctly empty off-hand as empty rather than passing", function()
+    local ns = fresh()
+    local slots = {
+      [16] = { parsed = parsed(7364), record = confirmedRecord(ns, "mh"),
+               equipLoc = "INVTYPE_2HWEAPON" },
+      [17] = { record = absentRecord(ns) },
+    }
+    local f = findingOfKind(ns.Rules.evaluatePlayer(slots, CONTEXT), "empty_by_design")
+    assert.equals(17, f.slot)
+    assert.equals("empty", f.state)
+  end)
+
   -- Neither accusing nor excusing. Without the main hand's equip location a
   -- greatsword and a one-hander look the same, and both guesses are wrong for
   -- half the raid.

@@ -51,6 +51,17 @@ Theme.state = {
     edge  = { 1, 1, 1, 0.05 },
     glyph = "\194\183", glyphColour = { 0.40, 0.42, 0.48 },
   },
+  -- Nothing equipped, and correctly so: the off-hand of a two-hander. Removed
+  -- once as unreachable, which it was -- until the empty off-hand became a case
+  -- the rules deliberately pass. Without it that slot styles as "ok", meaning a
+  -- raid leader cannot tell "checked and clean" from "there is nothing here".
+  -- Quieter than unknown and with its own glyph, because it is settled rather
+  -- than pending.
+  empty = {
+    fill  = { 0.10, 0.11, 0.13, 0.70 },
+    edge  = { 1, 1, 1, 0.03 },
+    glyph = "\226\128\147", glyphColour = { 0.34, 0.36, 0.41 },
+  },
 }
 
 -- Severity colours for text, as distinct from the cell fills above. These were
@@ -64,11 +75,14 @@ Theme.severity = {
   unknown = { 0.42, 0.44, 0.50 },
 }
 
--- The colour a finding should be drawn in. An unknown finding is grey whatever
--- its severity, because severity describes how bad it would be if confirmed, not
--- how confident we are.
+-- Severity describes how bad a finding would be if confirmed, not how confident
+-- we are -- so for any state that is not a confirmed problem, the state decides
+-- the colour and severity is ignored.
+local STATE_COLOUR = { unknown = "unknown", empty = "unknown" }
+
 function Theme.findingColour(finding)
-  if finding.state == "unknown" then return Theme.severity.unknown end
+  local byState = STATE_COLOUR[finding.state]
+  if byState then return Theme.severity[byState] end
   return Theme.severity[finding.severity] or Theme.severity.warn
 end
 

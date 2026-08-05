@@ -91,11 +91,16 @@ function Hydrator.build(link)
   -- setID is 16. These used to be re-derived from the link on every 2 s render
   -- pass -- four hundred API calls a second for values that only change when the
   -- link does, which is at harvest.
+  --
+  -- Collected into a table rather than read with select() twice. The previous
+  -- form called the API a second time for return 16 directly beneath a comment
+  -- promising it was called once, and the two calls could disagree: if the item
+  -- cache changed between them the second returned nil and the tier count
+  -- quietly lost a piece.
   local name, quality, setID
   if C_Item and C_Item.GetItemInfo then
-    local n, _, q = C_Item.GetItemInfo(link)
-    name, quality = n, q
-    setID = select(16, C_Item.GetItemInfo(link))
+    local info = { C_Item.GetItemInfo(link) }
+    name, quality, setID = info[1], info[3], info[16]
   end
 
   -- classID and equipLoc decide two checks that cannot be answered from the link
@@ -141,6 +146,19 @@ function Hydrator.build(link)
   }
 
   return item, evidence
+end
+
+-- Whether the item record is fully populated, as one answer rather than a
+-- condition assembled at the call site. Scanner asks this to decide whether to
+-- schedule a rehydrate, and keeping the list here is what stops a field added to
+-- the record from being forgotten in the retry condition -- which is exactly how
+-- name and quality ended up unable to heal: the retry checked three evidence
+-- flags, none of which covers GetItemInfo, so an item whose tooltip, sockets and
+-- item level all arrived but whose name did not stayed nameless forever.
+function Hydrator.isComplete(item, evidence)
+  if not item or not evidence then return false end
+  return evidence.tooltipComplete and evidence.itemLoaded and evidence.socketsKnown
+         and item.name ~= nil and item.classID ~= nil
 end
 
 -- Waits for the item to load, then builds. A hydration timeout hands back what

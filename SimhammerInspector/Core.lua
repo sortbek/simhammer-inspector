@@ -6,10 +6,17 @@ ns.Core = Core
 SimhammerInspectorDB = SimhammerInspectorDB or {}
 
 Core.config = {
-  schemaVersion    = 1,
+  -- Raised to 2 when the stored item record gained classID, equipLoc, name, icon
+  -- and quality, and the "absent" evidence source appeared. Those records were
+  -- being written long before anything read them back, so the gap never showed;
+  -- the moment login started restoring them, a store written by version 1 would
+  -- have been handed to code that assumes fields it does not have -- an off-hand
+  -- silently unchecked, gear rendering as "?". Migrate discards on a mismatch,
+  -- which costs one rescan and is the whole point of the gate.
+  schemaVersion    = 2,
   staleSeconds     = 7200,
   pruneSeconds     = 2592000,
-  minInterval      = 10,
+  minInterval      = ns.Evidence.MIN_INTERVAL,
 }
 
 local QUEUE_CONFIG = {
@@ -100,18 +107,25 @@ end
 local ALL_SLOTS = ns.Policy.Slots.ALL
 local SLOT_NAMES = ns.Policy.Slots.NAMES
 
+-- Ranked rather than branched, so adding a state cannot silently depend on the
+-- order the findings happen to arrive in. "empty" sits just above "ok": the slot
+-- was checked and is correctly empty, which is settled -- but it is not an item
+-- that passed, and those two must not look the same.
+local STATE_RANK = { ok = 0, empty = 1, unknown = 2, warn = 3, bad = 4 }
+
 local function worstState(findings)
-  local seen = nil
+  local worst, rank = "ok", 0
   for i = 1, table.getn(findings) do
     local f = findings[i]
-    if f.state == "bad" then
-      if f.severity == "error" then return "bad" end
-      seen = "warn"
-    elseif f.state == "unknown" and seen == nil then
-      seen = "unknown"
-    end
+    -- A confirmed finding is only as loud as its severity: a confirmed warning
+    -- is amber, not red.
+    local state = f.state
+    if state == "bad" and f.severity ~= "error" then state = "warn" end
+
+    local r = STATE_RANK[state] or 0
+    if r > rank then worst, rank = state, r end
   end
-  return seen or "ok"
+  return worst
 end
 
 -- Builds the shape the UI renders. Findings come back flat from Rules, so they
@@ -363,7 +377,10 @@ function Core.exportSimcTarget()
       say("|cffff4444no data captured for that target|r")
       return
     end
-    showBundle({ p })
+    -- Named, so an empty result explains itself. Without a subject the window
+    -- falls back to explaining the role filter, which neither of these two
+    -- paths consults: they build a bundle of exactly one player.
+    showBundle({ p }, p.name or "target")
   end)
 
   if not ok then say("|cffff4444" .. tostring(err) .. "|r") return end
@@ -374,7 +391,7 @@ function Core.exportSimcSelf()
   ns.Scanner.scanSelf()
   local p = simcPlayer(UnitGUID("player"), "player")
   if not p then say("|cffff4444no data for yourself yet|r") return end
-  showBundle({ p })
+  showBundle({ p }, p.name or "yourself")
 end
 
 -- Counts slots that still lack a confirmed reading, and hands that to the queue
@@ -394,7 +411,7 @@ local function updatePriorities()
       local seen, confirmed = 0, 0
       for _, slotRecord in pairs(record.slots) do
         seen = seen + 1
-        if ns.Evidence.isConfirmed(slotRecord, { "linkComplete" }, Core.config.minInterval) then
+        if ns.Evidence.isSlotSettled(slotRecord, Core.config.minInterval) then
           confirmed = confirmed + 1
         end
       end
@@ -441,7 +458,10 @@ function Core.reportToChat()
         -- confirmed evidence is not something to call someone out over.
         if f.state == "bad" then
           local where = f.slot and (SLOT_NAMES[f.slot] or ("slot " .. f.slot)) or "overall"
-          local colour = (f.severity == "error") and "|cffff4444" or "|cffffcc00"
+          -- Derived from the same table the grid draws from. The two hex codes
+          -- that used to sit here had already drifted: ffcc00 is not the amber
+          -- any cell in the grid is painted with.
+          local colour = ns.Theme.hex(ns.Theme.findingColour(f))
           shown[table.getn(shown) + 1] =
             string.format("  %s%s|r: %s (%s)", colour, where, f.detail, f.kind)
         end
@@ -505,6 +525,33 @@ local function debugDump()
   end
 end
 
+-- Puts a player's stored gear back in play. Driven off the roster's onAdded
+-- rather than a sweep at login: the group APIs are not reliably populated at
+-- PLAYER_LOGIN, so a sweep there sees a roster that fills in moments later and
+-- misses everyone in it -- plus anyone who joins mid-session.
+--
+-- Restoring the record without restoring the queue's view of it left the header
+-- reporting nought confirmed over a grid that was already full, so the queue is
+-- told what the evidence says rather than being made to rediscover it.
+local function restoreFromCache(guid)
+  if not cache or records[guid] then return end
+
+  local cached = cache:get(guid)
+  if not cached or not cached.slots or not next(cached.slots) then return end
+  records[guid] = cached
+
+  local settled, seen = 0, 0
+  for _, slotRecord in pairs(cached.slots) do
+    seen = seen + 1
+    if ns.Evidence.isSlotSettled(slotRecord, Core.config.minInterval) then
+      settled = settled + 1
+    end
+  end
+  if seen > 0 and settled == seen then
+    queue:onConfirmed(guid, cached.scannedAt or time())
+  end
+end
+
 local function onLogin()
   resolveDataStatus()
   cache = ns.Cache.new(SimhammerInspectorDB, Core.config)
@@ -513,29 +560,14 @@ local function onLogin()
 
   queue = ns.ScanQueue.new(QUEUE_CONFIG)
 
-  ns.Roster.onAdded(function(guid) queue:addPlayer(guid, time()) end)
+  ns.Roster.onAdded(function(guid)
+    queue:addPlayer(guid, time())
+    restoreFromCache(guid)
+  end)
   ns.Roster.onRemoved(function(guid) queue:removePlayer(guid) end)
   ns.Roster.refresh()
 
-  -- Read the cache back. It was written on every harvest and never opened once,
-  -- so a /reload threw away the whole raid's gear and the grid came back empty
-  -- -- which is the one thing persisting it was for. Evidence timestamps are
-  -- server time precisely so they still mean something across a session
-  -- boundary, and anything older than staleSeconds still renders dimmed.
-  local restored = 0
-  for guid in pairs(ns.Roster.all()) do
-    local cached = cache:get(guid)
-    if cached and cached.slots and next(cached.slots) then
-      records[guid] = cached
-      restored = restored + 1
-    end
-  end
-
   ns.Scanner.init(queue, cache, records)
-
-  if restored > 0 then
-    say("restored " .. restored .. " players from the last session")
-  end
 
   -- The grid refreshes on a slow timer rather than on every scan event: the row
   -- redraw is cheap, but rebuilding twenty entries on each of five inspects per

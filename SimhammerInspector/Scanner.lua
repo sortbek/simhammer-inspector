@@ -26,14 +26,14 @@ Scanner.config = {
   -- more attempts per minute at negligible risk.
   timeoutSeconds = 2,
   tickSeconds    = 1,
-  -- Owned here rather than reached for from Core. Scanner already takes its
-  -- other dependencies by injection; this was the one upward reference, and it
-  -- only worked because it sat inside a function body.
-  minInterval    = 10,
+  -- Read from Evidence rather than copied. It was a literal here and another in
+  -- Core.config, and the two have to agree: the scanner uses it to call a player
+  -- covered, Rules to let a finding turn red. Nothing would have caught them
+  -- drifting apart except a raid leader noticing the header disagreed with the
+  -- grid.
+  minInterval    = ns.Evidence.MIN_INTERVAL,
 }
 
-local LINK_SOURCES = { "linkComplete" }
-local ABSENT_SOURCES = { "absent" }
 
 local queue, cache, records
 local requestTimes = {}
@@ -81,19 +81,17 @@ local function harvest(unit, guid)
   for i = 1, table.getn(SLOTS) do
     local slot = SLOTS[i]
     local link = GetInventoryItemLink(unit, slot)
-    local slotRecord = record.slots[slot] or ns.Evidence.newSlotRecord()
-    record.slots[slot] = slotRecord
 
     if not link then
-      -- A slot the inspect did not answer for is recorded rather than skipped.
-      -- Skipping it left the slot out of the record entirely, and every consumer
-      -- iterates the record -- so an empty slot was not a finding, it was a
-      -- player with fifteen slots.
-      slotRecord.itemLink = nil
-      slotRecord.item = nil
-      absent[table.getn(absent) + 1] = slotRecord
+      -- Collected, not concluded. Whether this is an empty slot or one the
+      -- inspect simply did not answer for cannot be told from inside the loop;
+      -- it depends on how much of the character the whole pass returned.
+      absent[table.getn(absent) + 1] = slot
     else
       returned = returned + 1
+      local slotRecord = record.slots[slot] or ns.Evidence.newSlotRecord()
+      record.slots[slot] = slotRecord
+
       local item, evidence = ns.Hydrator.build(link)
       ns.Evidence.record(slotRecord, link, evidence, stamp)
       slotRecord.itemLink = link
@@ -105,7 +103,7 @@ local function harvest(unit, guid)
       -- link stays valid indefinitely, so anything incomplete is rebuilt once
       -- the item loads. Without this, every check that needs the item cache
       -- silently reads as "unknown" forever.
-      if not (evidence.tooltipComplete and evidence.itemLoaded and evidence.socketsKnown) then
+      if not ns.Hydrator.isComplete(item, evidence) then
         ns.Hydrator.hydrate(link, function(rebuilt, rebuiltEvidence)
           if not rebuilt then return end
           local current = record.slots[slot]
@@ -123,9 +121,20 @@ local function harvest(unit, guid)
   -- cells. Evidence.record resets the counters when the fingerprint changes, and
   -- an empty slot fingerprints as nil, so equipping or removing an item starts
   -- the two-read rule over on its own.
+  --
+  -- The item is dropped here and nowhere else. Clearing it inside the loop meant
+  -- a thin pass -- the measured median is eight of sixteen slots -- destroyed
+  -- gear that had already been read, then persisted the loss through cache:put.
+  -- A slot the pass did not reach keeps what it knew and stays stale, which is
+  -- what stale data is for.
   if returned >= ns.Policy.Slots.MIN_COMPLETE_PASS then
     for i = 1, table.getn(absent) do
-      ns.Evidence.record(absent[i], nil, { absent = true }, stamp)
+      local slot = absent[i]
+      local slotRecord = record.slots[slot] or ns.Evidence.newSlotRecord()
+      record.slots[slot] = slotRecord
+      slotRecord.itemLink = nil
+      slotRecord.item = nil
+      ns.Evidence.record(slotRecord, nil, { absent = true }, stamp)
     end
   end
 
@@ -149,15 +158,11 @@ local function harvest(unit, guid)
   return returned
 end
 
--- An empty slot confirms on its own source. Judging it by linkComplete, which
--- can never arrive for a slot with no item, would mean a player wearing a
--- two-hander could never reach the confirmed state at all.
 local function allSlotsConfirmed(record)
   local confirmed, seen = 0, 0
   for _, slotRecord in pairs(record.slots) do
     seen = seen + 1
-    local sources = slotRecord.itemLink and LINK_SOURCES or ABSENT_SOURCES
-    if ns.Evidence.isConfirmed(slotRecord, sources, Scanner.config.minInterval) then
+    if ns.Evidence.isSlotSettled(slotRecord, Scanner.config.minInterval) then
       confirmed = confirmed + 1
     end
   end
@@ -228,8 +233,9 @@ end
 -- Each component is evaluated separately so a failing prefilter can be
 -- attributed. Collapsing them into one boolean expression made a live raid
 -- report "range=false" for twenty players with no way to tell which check said
--- no.
--- Every API call goes through pcall and records its own outcome, so a failing\r\n-- prefilter can be attributed to a specific call rather than guessed at.\r\n-- Patch 12.0 introduced "secret" values: an insecure addon may hold one but may
+-- no. Every API call goes through pcall and records its own outcome.
+--
+-- Patch 12.0 introduced "secret" values: an insecure addon may hold one but may
 -- not branch on it. UnitInRange now returns such a value, and evaluating it
 -- throws "attempt to perform boolean test on a secret boolean value". Coercion
 -- therefore happens through pcall, and a value that cannot be tested comes back

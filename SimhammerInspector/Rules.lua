@@ -277,7 +277,17 @@ local function slotFindingsFor(slot, entry, slots, context)
   end
 
   local verdict = emptyOffHandVerdict(slots)
-  if verdict == "expected" then return {} end
+  if verdict == "expected" then
+    -- Not silence. Returning no findings made the cell render as "ok", styled
+    -- exactly like an item that passed every check, so a raid leader could not
+    -- tell a correctly two-handed player from one whose off-hand was verified
+    -- clean. Severity is unread for a finding that is not "bad"; the state is
+    -- what carries the meaning.
+    local findings = {}
+    add(findings, slot, "empty_by_design", "info", "empty",
+        "nothing equipped; the main hand occupies both")
+    return findings
+  end
 
   local findings = Rules.evaluateSlot(slot, entry, entry.record, context)
   if verdict == "unknown" then

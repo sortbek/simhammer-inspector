@@ -89,3 +89,46 @@ describe("Evidence confirmation", function()
     assert.falsy(E.isConfirmed(rec, { "linkComplete" }, 10))
   end)
 end)
+
+-- Two callers asked "is this slot settled" and answered it differently: the
+-- scanner learned to judge an empty slot by its absence reads, the queue's
+-- priority pass was left asking for a link that can never arrive for a slot with
+-- no item. The player it happened to -- anyone carrying a two-hander -- stayed
+-- permanently outstanding and parked at the top of the queue.
+describe("Evidence slot settlement", function()
+  local function withLink(E, link)
+    local rec = E.newSlotRecord()
+    rec.itemLink = link
+    E.record(rec, link, COMPLETE, 100)
+    E.record(rec, link, COMPLETE, 120)
+    return rec
+  end
+
+  local function empty(E)
+    local rec = E.newSlotRecord()
+    E.record(rec, nil, { absent = true }, 100)
+    E.record(rec, nil, { absent = true }, 120)
+    return rec
+  end
+
+  it("settles a filled slot on its link", function()
+    local E = evidence()
+    assert.truthy(E.isSlotSettled(withLink(E, "item:1"), 10))
+  end)
+
+  it("settles an empty slot on its absence reads", function()
+    local E = evidence()
+    assert.truthy(E.isSlotSettled(empty(E), 10))
+  end)
+
+  it("does not settle an empty slot read only once", function()
+    local E = evidence()
+    local rec = E.newSlotRecord()
+    E.record(rec, nil, { absent = true }, 100)
+    assert.falsy(E.isSlotSettled(rec, 10))
+  end)
+
+  it("does not settle a slot nobody has scanned", function()
+    assert.falsy(evidence().isSlotSettled(nil, 10))
+  end)
+end)

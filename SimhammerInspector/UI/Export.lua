@@ -4,6 +4,7 @@ local Export = {}
 ns.Export = Export
 
 local C = ns.Theme.colour
+local S = ns.Theme.severity
 
 local frame, editBox, statusText, skippedText, titleText, roleBar
 local roleBoxes = {}
@@ -138,12 +139,12 @@ function Export.show(text, skipped, exported, subject)
   if exported > 0 then
     statusText:SetText(string.format("%d profile%s  \194\183  Ctrl+C copies and closes",
                                      exported, exported == 1 and "" or "s"))
-    statusText:SetTextColor(0.36, 0.74, 0.46)
+    statusText:SetTextColor(S.ok[1], S.ok[2], S.ok[3])
   elseif subject then
     -- The role explanations below are about a selection this window does not
     -- have; the skipped line underneath carries the actual reason.
     statusText:SetText("could not build a profile for " .. subject)
-    statusText:SetTextColor(0.92, 0.70, 0.18)
+    statusText:SetTextColor(S.warn[1], S.warn[2], S.warn[3])
   else
     -- Nothing selected and nothing matched look identical in an empty box, so
     -- say which of the two it is.
@@ -153,7 +154,7 @@ function Export.show(text, skipped, exported, subject)
     end
     statusText:SetText(anyRole and "no players matched those roles yet"
                                 or "no roles selected")
-    statusText:SetTextColor(0.92, 0.70, 0.18)
+    statusText:SetTextColor(S.warn[1], S.warn[2], S.warn[3])
   end
 
   if skipped and table.getn(skipped) > 0 then

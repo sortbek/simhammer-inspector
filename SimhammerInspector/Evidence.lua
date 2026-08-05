@@ -24,6 +24,27 @@ function Evidence.fingerprint(link)
   return h
 end
 
+-- The two reads that confirm a negative finding must be this far apart. Owned
+-- here because it is a property of the confirmation rule, not of any consumer:
+-- the scanner uses it to decide a player is covered, Rules to decide a finding
+-- may turn red. Held as two literals those could drift, and the symptom would be
+-- a coverage counter reporting a player as done over a grid still showing grey.
+Evidence.MIN_INTERVAL = 10
+
+local LINK_ONLY = { "linkComplete" }
+local ABSENT_ONLY = { "absent" }
+
+-- Whether a slot's reading is settled, which depends on what is in it: a slot
+-- holding an item settles on its link, an empty one on absence reads. Asking for
+-- linkComplete on an empty slot waits for evidence that can never arrive, which
+-- is how a two-hander's off-hand stayed permanently outstanding and kept its
+-- owner parked at the top of a queue with nothing left to learn from them.
+function Evidence.isSlotSettled(slotRecord, minInterval)
+  if not slotRecord then return false end
+  local sources = slotRecord.itemLink and LINK_ONLY or ABSENT_ONLY
+  return Evidence.isConfirmed(slotRecord, sources, minInterval)
+end
+
 function Evidence.newSlotRecord()
   local reads = {}
   for i = 1, table.getn(Evidence.SOURCES) do

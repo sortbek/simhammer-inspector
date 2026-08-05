@@ -21,7 +21,8 @@ local SLOT_FRAME_NAMES = {
 
 local SLOT_NAMES = ns.Policy.Slots.NAMES
 
-local GREY = ns.Theme.severity.unknown
+local S = ns.Theme.severity
+local GREY = S.unknown
 local MAX_EMB = ns.Policy.Season.MAX_EMBELLISHMENTS
 local M = ns.Theme.metrics
 local C = ns.Theme.colour
@@ -238,8 +239,11 @@ end
 function Grid.tooltipFor(slot, slotInfo, state)
   local name = SLOT_NAMES[slot] or ("Slot " .. slot)
 
-  if not slotInfo or state == "empty" then
-    return { name, { text = "nothing equipped", r = GREY[1], g = GREY[2], b = GREY[3] } }
+  -- An empty slot is no longer short-circuited here. It carries a finding that
+  -- says why it is empty, and "nothing equipped; the main hand occupies both"
+  -- is the answer to the question someone hovers an empty cell to ask.
+  if not slotInfo then
+    return { name, { text = "not scanned", r = GREY[1], g = GREY[2], b = GREY[3] } }
   end
 
   local lines = { name }
@@ -316,7 +320,7 @@ function Grid.updateRow(index, entry)
     ns.Theme.setText(row.tier, C.textFaint)
   elseif tier.worn >= tier.required then
     row.tier:SetText(tier.required .. "/" .. tier.required)
-    row.tier:SetTextColor(0.36, 0.74, 0.46)
+    row.tier:SetTextColor(S.ok[1], S.ok[2], S.ok[3])
   elseif not tier.confirmed then
     -- A slot that has not been read yet could be holding tier, so the count is a
     -- floor. Same "?" the embellishment column uses for the same reason.
@@ -324,7 +328,7 @@ function Grid.updateRow(index, entry)
     ns.Theme.setText(row.tier, C.textFaint)
   else
     row.tier:SetText(tier.worn .. "/" .. tier.required)
-    row.tier:SetTextColor(0.92, 0.70, 0.18)
+    row.tier:SetTextColor(S.warn[1], S.warn[2], S.warn[3])
   end
 
   local emb = entry.embellishments
@@ -337,10 +341,10 @@ function Grid.updateRow(index, entry)
     ns.Theme.setText(row.emb, C.textFaint)
   elseif emb.found >= MAX_EMB then
     row.emb:SetText(MAX_EMB .. "/" .. MAX_EMB)
-    row.emb:SetTextColor(0.36, 0.74, 0.46)
+    row.emb:SetTextColor(S.ok[1], S.ok[2], S.ok[3])
   else
     row.emb:SetText(emb.found .. "/" .. MAX_EMB)
-    row.emb:SetTextColor(0.92, 0.70, 0.18)
+    row.emb:SetTextColor(S.warn[1], S.warn[2], S.warn[3])
   end
 
   for i = 1, table.getn(SLOTS) do
@@ -352,16 +356,16 @@ function Grid.updateRow(index, entry)
 
   if entry.errors > 0 then
     row.summary:SetText(tostring(entry.errors))
-    row.summary:SetTextColor(0.93, 0.31, 0.31)
+    row.summary:SetTextColor(S.error[1], S.error[2], S.error[3])
   elseif entry.warnings > 0 then
     row.summary:SetText(tostring(entry.warnings))
-    row.summary:SetTextColor(0.92, 0.70, 0.18)
+    row.summary:SetTextColor(S.warn[1], S.warn[2], S.warn[3])
   elseif entry.unknowns > 0 then
     row.summary:SetText(tostring(entry.unknowns) .. "?")
     row.summary:SetTextColor(0.40, 0.42, 0.48)
   else
     row.summary:SetText("\226\156\147")
-    row.summary:SetTextColor(0.36, 0.74, 0.46)
+    row.summary:SetTextColor(S.ok[1], S.ok[2], S.ok[3])
   end
 end
 
@@ -392,6 +396,14 @@ function Grid.refresh(entries, coverage)
     rows[i]:Hide()
   end
 
+  -- The scan marker caches which player it drew, but rows are pooled by index
+  -- and the sort above has just reassigned them. Without this the marker keeps
+  -- believing it is current while sitting on whoever inherited the old row --
+  -- and an inspect lasts about as long as the gap between refreshes, so it
+  -- happened routinely rather than rarely.
+  lastScanMarker = nil
+  Grid.updateScanMarker()
+
   -- The window sizes to its content, so there is nothing to scroll. A raid caps
   -- at thirty and thirty rows still fit a 1080p screen, which is why the scroll
   -- frame that used to live here was dead weight taking up horizontal space.
@@ -418,13 +430,13 @@ function Grid.refresh(entries, coverage)
   local scanning = coverage.confirmed < coverage.total
   if scanning and coverage.confirmed == 0 then
     coverageText:SetText("Scanning")
-    coverageText:SetTextColor(0.92, 0.70, 0.18)
+    coverageText:SetTextColor(S.warn[1], S.warn[2], S.warn[3])
   else
     local text = string.format("%d / %d confirmed", coverage.confirmed, coverage.total)
     if scanning then
-      coverageText:SetTextColor(0.92, 0.70, 0.18)
+      coverageText:SetTextColor(S.warn[1], S.warn[2], S.warn[3])
     else
-      coverageText:SetTextColor(0.36, 0.74, 0.46)
+      coverageText:SetTextColor(S.ok[1], S.ok[2], S.ok[3])
       if errors == 0 and warnings == 0 then
         text = text .. "   \194\183   everyone is clean"
       end
@@ -697,10 +709,15 @@ end
 function Grid.selectPlayer(guid)
   if selectedGuid == guid then
     selectedGuid = nil
-    ns.Detail.hide()
   else
     selectedGuid = guid
   end
+
+  -- Hiding keys off the outcome, not off which branch got here. The panel's own
+  -- close button calls selectPlayer(nil), which lands in the else branch with a
+  -- selection already set -- so hiding only in the toggle-off branch left the X
+  -- clearing the row highlight and leaving the panel on screen.
+  if not selectedGuid then ns.Detail.hide() end
   -- The refresh drives the panel (see the Detail.show call inside it), so
   -- showing it here as well made every click pay for two full rebuilds.
   if lastEntries then Grid.refresh(lastEntries, lastCoverage) end
