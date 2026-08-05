@@ -64,9 +64,11 @@ button in Detail — four hand-rolled buttons drift apart within a week, which i
 
 - `b:SetTooltip(text)` — writes `b.tooltip`; `OnEnter` reads the field instead of the upvalue.
   The `tooltip` constructor argument keeps working by setting the same field.
-- `b:SetEnabled(bool)` — when disabled: text in `textFaint`, no hover brightening, `OnClick`
+- `b:SetUsable(bool)` — when unusable: text in `textFaint`, no hover brightening, `OnClick`
   returns without calling the handler. The tooltip still shows on hover; that is the whole
-  point of the disabled state here.
+  point of the state. Named `SetUsable` rather than `SetEnabled` because the latter is a real
+  method on Button widgets, and an instance field shadowing it would leave two disabled states
+  disagreeing about which one the button is in.
 
 Existing callers in `Grid.lua` pass no new arguments and behave identically.
 
