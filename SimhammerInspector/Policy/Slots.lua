@@ -45,6 +45,19 @@ Slots.SIMC = {
 
 Slots.TIER = { HEAD, SHOULDER, CHEST, HANDS, LEGS }
 
+-- The two weapon slots are named because Rules has to relate them to each other,
+-- and "slot == 17" at a call site is a number nobody can check.
+Slots.MAINHAND = MAINHAND
+Slots.OFFHAND = OFFHAND
+
+-- How many of the sixteen slots an inspect must return before the pass is
+-- treated as a complete read of the character. A raider fills at least fourteen,
+-- so a thinner pass is a partial answer rather than a sparsely geared player.
+-- Both consumers depend on the same judgement: the queue counts a substantial
+-- pass as progress, and the scanner only concludes a slot is empty from a pass
+-- that clearly saw the whole character.
+Slots.MIN_COMPLETE_PASS = 10
+
 -- Midnight season 1: cloak and bracers dropped out, helm and shoulders came
 -- back. Legs carry a spellthread, which lands in the same enchantID field.
 -- Confirmed against real inspect data: cloak, bracers, neck, waist, hands and
@@ -57,13 +70,30 @@ local ENCHANTABLE = {
 -- Slots that can gain a socket from a separately purchased item.
 local SOCKETABLE = { [HEAD] = true, [WRIST] = true, [WAIST] = true }
 
-function Slots.isEnchantable(slot, itemSubclass)
-  -- Only an off-hand *weapon* takes an enchant; shields and held-in-off-hand
-  -- frills do not.
+-- LE_ITEM_CLASS_WEAPON. Written out rather than taken from the global for the
+-- same reason as the slot numbers, and matched numerically rather than against
+-- the item type string: that string is localised, so comparing it to "weapon"
+-- silently classifies every weapon on a non-English client as not-a-weapon.
+Slots.WEAPON_CLASS_ID = 2
+
+-- Equip locations that occupy both hands, which makes an empty off-hand correct
+-- rather than a finding. Ranged weapons belong here too: a hunter's bow sits in
+-- the main hand and leaves the off-hand legitimately empty.
+local BOTH_HANDS = {
+  INVTYPE_2HWEAPON = true, INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true,
+}
+
+-- itemClassID is only consulted for the off-hand, where it is the difference
+-- between a weapon (enchantable) and a shield or held-in-off-hand item (not).
+function Slots.isEnchantable(slot, itemClassID)
   if slot == OFFHAND then
-    return itemSubclass == "weapon"
+    return itemClassID == Slots.WEAPON_CLASS_ID
   end
   return ENCHANTABLE[slot] == true
+end
+
+function Slots.occupiesBothHands(equipLoc)
+  return BOTH_HANDS[equipLoc] == true
 end
 
 function Slots.isSocketable(slot)

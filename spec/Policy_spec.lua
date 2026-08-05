@@ -29,11 +29,21 @@ describe("Policy slots", function()
     assert.falsy(S.isEnchantable(9))
   end)
 
+  -- Matched on the numeric item class, not the item type string: that string is
+  -- localised, so a German client would have called every weapon unenchantable.
   it("requires an enchant on an off-hand weapon but not on a shield", function()
     local S = policy().Slots
-    assert.truthy(S.isEnchantable(17, "weapon"))
-    assert.falsy(S.isEnchantable(17, "shield"))
-    assert.falsy(S.isEnchantable(17, "holdable"))
+    assert.truthy(S.isEnchantable(17, S.WEAPON_CLASS_ID))
+    assert.falsy(S.isEnchantable(17, 4))
+    assert.falsy(S.isEnchantable(17, nil))
+  end)
+
+  it("treats two-handers and ranged weapons as occupying the off-hand", function()
+    local S = policy().Slots
+    assert.truthy(S.occupiesBothHands("INVTYPE_2HWEAPON"))
+    assert.truthy(S.occupiesBothHands("INVTYPE_RANGED"))
+    assert.falsy(S.occupiesBothHands("INVTYPE_WEAPONMAINHAND"))
+    assert.falsy(S.occupiesBothHands(nil))
   end)
 
   it("marks helm, bracers and waist as socketable", function()

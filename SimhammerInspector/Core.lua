@@ -20,7 +20,7 @@ local QUEUE_CONFIG = {
   -- of them was enough to write off eight raiders who were standing next to us.
   unreachableAfter     = 10,
   reconfirmSeconds     = 600,
-  substantialPassSlots = 10,
+  substantialPassSlots = ns.Policy.Slots.MIN_COMPLETE_PASS,
 }
 
 local queue, cache
@@ -78,6 +78,12 @@ local function findingsFor(guid)
       -- Not `item and item.embellished or nil`: that turns a definite false into
       -- nil, and nil means unknown, which silences the whole check.
       embellished = item and item.embellished,
+      -- The off-hand enchant check needs the item class, and the empty-off-hand
+      -- check needs the main hand's equip location. Both come off the item
+      -- record; they used to be read from context fields nobody ever set, which
+      -- meant an off-hand weapon was never checked for an enchant at all.
+      classID     = item and item.classID or nil,
+      equipLoc    = item and item.equipLoc or nil,
       record      = slotRecord,
     }
   end
@@ -482,7 +488,25 @@ local function onLogin()
   ns.Roster.onRemoved(function(guid) queue:removePlayer(guid) end)
   ns.Roster.refresh()
 
+  -- Read the cache back. It was written on every harvest and never opened once,
+  -- so a /reload threw away the whole raid's gear and the grid came back empty
+  -- -- which is the one thing persisting it was for. Evidence timestamps are
+  -- server time precisely so they still mean something across a session
+  -- boundary, and anything older than staleSeconds still renders dimmed.
+  local restored = 0
+  for guid in pairs(ns.Roster.all()) do
+    local cached = cache:get(guid)
+    if cached and cached.slots and next(cached.slots) then
+      records[guid] = cached
+      restored = restored + 1
+    end
+  end
+
   ns.Scanner.init(queue, cache, records)
+
+  if restored > 0 then
+    say("restored " .. restored .. " players from the last session")
+  end
 
   -- The grid refreshes on a slow timer rather than on every scan event: the row
   -- redraw is cheap, but rebuilding twenty entries on each of five inspects per

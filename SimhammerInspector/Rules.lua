@@ -25,8 +25,17 @@ end
 local LINK = { "linkComplete" }
 local LINK_AND_SOCKETS = { "linkComplete", "socketsKnown" }
 local TOOLTIP = { "tooltipComplete" }
-local ITEM_LOADED = { "itemLoaded" }
 local SOCKETS = { "socketsKnown" }
+local ABSENT = { "absent" }
+
+-- A finding that cannot be verified is "unknown", not silence. Silence produces
+-- no finding, and no finding renders as a green cell -- a verified pass drawn
+-- from evidence we do not have. This is the same rule as stateFor, applied to
+-- the case where the obstacle is our own data rather than the player's.
+local function unverified(findings, slot, kind, what)
+  add(findings, slot, kind, "warn", "unknown",
+      what .. " data is out of date for this client build")
+end
 
 -- Enchants and gems are ranked identically: wrong season beats wrong quality,
 -- both are warnings, both need the same evidence. Only the noun differs, and
@@ -43,9 +52,12 @@ local function checkTierAndQuality(findings, slot, info, noun, slotRecord, conte
   end
 end
 
-local function checkEnchant(findings, slot, parsed, slotRecord, context)
-  if not ns.Policy.Slots.isEnchantable(slot, context.itemSubclass) then return end
+-- Takes the item rather than its parse result, because whether an off-hand is
+-- enchantable at all depends on its item class, which is not in the link.
+local function checkEnchant(findings, slot, item, slotRecord, context)
+  if not ns.Policy.Slots.isEnchantable(slot, item.classID) then return end
 
+  local parsed = item.parsed
   if parsed.enchantID == 0 then
     add(findings, slot, "missing_enchant", "error",
         stateFor(slotRecord, LINK, context),
@@ -53,7 +65,12 @@ local function checkEnchant(findings, slot, parsed, slotRecord, context)
     return
   end
 
-  if not context.dataValid then return end
+  -- Out-of-date tables cannot rank an enchant, but they can still see one is
+  -- there. Say so rather than returning: an unrankable enchant is unknown.
+  if not context.dataValid then
+    unverified(findings, slot, "enchant_unverified", "enchant")
+    return
+  end
 
   local info = ns.Data.Enchants[parsed.enchantID]
   if not info then return end
@@ -68,11 +85,15 @@ local function checkEnchant(findings, slot, parsed, slotRecord, context)
 end
 
 local function checkGems(findings, slot, parsed, slotRecord, context)
-  if not context.dataValid then return end
-
   for i = 1, 4 do
     local gemID = parsed.gemIDs[i]
     if gemID ~= 0 then
+      -- Reported once per slot, not once per gem: the obstacle is the same
+      -- table for all four, and four identical lines say nothing extra.
+      if not context.dataValid then
+        unverified(findings, slot, "gem_unverified", "gem")
+        return
+      end
       local info = ns.Data.Gems[gemID]
       if info then
         checkTierAndQuality(findings, slot, info, "gem", slotRecord, context)
@@ -131,17 +152,17 @@ function Rules.evaluateSlot(slot, item, slotRecord, context)
   local findings = {}
 
   if not item or not item.parsed then
-    -- A two-handed weapon makes an empty off-hand correct, not a finding.
-    local isEmptyOffhandWithTwoHander = (slot == 17 and context.twoHanded)
-    if not isEmptyOffhandWithTwoHander then
-      add(findings, slot, "missing_item", "error",
-          stateFor(slotRecord, ITEM_LOADED, context),
-          "no item in this slot")
-    end
+    -- Confirmed by absence reads, not by itemLoaded: there is no item here to
+    -- load, so itemLoaded could never arrive and this finding could never leave
+    -- the unknown state. Whether an empty off-hand is legitimate is decided one
+    -- level up, where the main hand is visible.
+    add(findings, slot, "missing_item", "error",
+        stateFor(slotRecord, ABSENT, context),
+        "no item in this slot")
     return findings
   end
 
-  checkEnchant(findings, slot, item.parsed, slotRecord, context)
+  checkEnchant(findings, slot, item, slotRecord, context)
   checkGems(findings, slot, item.parsed, slotRecord, context)
   checkUpgrade(findings, slot, item.upgrade, slotRecord, context)
   checkSockets(findings, slot, item, slotRecord, context)
@@ -188,28 +209,92 @@ local function countEmbellishments(slots)
   return found
 end
 
+-- A total is only as trustworthy as its weakest contributor, so one unconfirmed
+-- slot makes the whole count unknown. These two findings used to hardcode "bad"
+-- and were the only ones in the file that could go red without the evidence rule
+-- the rest of it enforces.
+local function entryConfirmed(entry, context)
+  if not entry then return false end
+  local sources = entry.parsed and LINK or ABSENT
+  return ns.Evidence.isConfirmed(entry.record, sources, context.minInterval)
+end
+
+local function tierConfirmed(slots, context)
+  local tierSlots = ns.Policy.Slots.TIER
+  for i = 1, table.getn(tierSlots) do
+    if not entryConfirmed(slots[tierSlots[i]], context) then return false end
+  end
+  return true
+end
+
+-- Embellishments are counted over every slot that has an item, so every one of
+-- those has to be confirmed -- unlike tier, which only reads five known slots.
+local function countedSlotsConfirmed(slots, context)
+  for _, entry in pairs(slots) do
+    if not entryConfirmed(entry, context) then return false end
+  end
+  return true
+end
+
+-- What an empty off-hand means depends on the main hand, which only the
+-- player-wide pass can see. Three answers, not two: if the main hand's equip
+-- location could not be read we cannot tell a greatsword from a one-hander, and
+-- guessing either way is how a correctly geared warrior gets a red slot or a
+-- genuinely naked one gets a pass.
+local function emptyOffHandVerdict(slots)
+  local mainHand = slots[ns.Policy.Slots.MAINHAND]
+  if not mainHand or not mainHand.parsed then return "report" end
+  if not mainHand.equipLoc then return "unknown" end
+  if ns.Policy.Slots.occupiesBothHands(mainHand.equipLoc) then return "expected" end
+  return "report"
+end
+
+local function slotFindingsFor(slot, entry, slots, context)
+  if slot ~= ns.Policy.Slots.OFFHAND or entry.parsed then
+    return Rules.evaluateSlot(slot, entry, entry.record, context)
+  end
+
+  local verdict = emptyOffHandVerdict(slots)
+  if verdict == "expected" then return {} end
+
+  local findings = Rules.evaluateSlot(slot, entry, entry.record, context)
+  if verdict == "unknown" then
+    for i = 1, table.getn(findings) do findings[i].state = "unknown" end
+  end
+  return findings
+end
+
 function Rules.evaluatePlayer(slots, context)
   local findings = {}
 
   for slot, entry in pairs(slots) do
-    local slotFindings = Rules.evaluateSlot(slot, entry, entry.record, context)
+    local slotFindings = slotFindingsFor(slot, entry, slots, context)
     for i = 1, table.getn(slotFindings) do
       findings[table.getn(findings) + 1] = slotFindings[i]
     end
   end
 
-  if not context.dataValid then return findings end
-
-  local worn, total = countTierPieces(slots)
-  if worn and worn < total then
-    add(findings, nil, "tier_incomplete", "warn", "bad",
-        worn .. " of " .. total .. " tier pieces")
+  -- Tier depends on generated set IDs, so stale data makes the count meaningless
+  -- rather than merely unranked: last season's IDs match nobody and a fully
+  -- tiered raider reads as 0 of 5. Report the obstacle instead of the count.
+  if not context.dataValid then
+    unverified(findings, nil, "tier_unverified", "tier set")
+  else
+    local worn, total = countTierPieces(slots)
+    if worn and worn < total then
+      add(findings, nil, "tier_incomplete", "warn",
+          tierConfirmed(slots, context) and "bad" or "unknown",
+          worn .. " of " .. total .. " tier pieces")
+    end
   end
 
+  -- Embellishments are read off the tooltip, not out of a generated table, so
+  -- they survive a data version this addon does not recognise.
   local embellishments = countEmbellishments(slots)
   local maxEmbellishments = ns.Policy.Season.MAX_EMBELLISHMENTS
   if embellishments and embellishments < maxEmbellishments then
-    add(findings, nil, "embellishments_missing", "warn", "bad",
+    add(findings, nil, "embellishments_missing", "warn",
+        countedSlotsConfirmed(slots, context) and "bad" or "unknown",
         embellishments .. " of " .. maxEmbellishments .. " embellishments")
   end
 

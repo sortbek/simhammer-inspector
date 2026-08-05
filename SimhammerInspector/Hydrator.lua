@@ -98,9 +98,16 @@ function Hydrator.build(link)
     setID = select(16, C_Item.GetItemInfo(link))
   end
 
-  local icon
+  -- classID and equipLoc decide two checks that cannot be answered from the link
+  -- alone: whether an off-hand takes an enchant (only a weapon does; shields and
+  -- held-in-off-hand items do not) and whether an empty off-hand is correct
+  -- because the main hand occupies both. GetItemInfoInstant is already being
+  -- called for the icon and it answers from the client's static data, so this
+  -- costs nothing beyond reading three returns instead of one.
+  local icon, classID, equipLoc
   if C_Item and C_Item.GetItemInfoInstant then
-    icon = select(5, C_Item.GetItemInfoInstant(link))
+    local _, _, _, loc, texture, class = C_Item.GetItemInfoInstant(link)
+    icon, classID, equipLoc = texture, class, loc
   end
 
   local ilvl = nil
@@ -122,6 +129,8 @@ function Hydrator.build(link)
     name        = name,
     icon        = icon,
     quality     = quality,
+    classID     = classID,
+    equipLoc    = equipLoc,
   }
 
   local evidence = {

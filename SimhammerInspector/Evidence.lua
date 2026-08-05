@@ -3,7 +3,12 @@ local addonName, ns = ...
 local Evidence = {}
 ns.Evidence = Evidence
 
-Evidence.SOURCES = { "linkComplete", "socketsKnown", "tooltipComplete", "itemLoaded" }
+-- "absent" is the evidence that a slot is empty. It has to be a source like any
+-- other: an inspect that answered and returned no link for a slot is a read, not
+-- a gap in the data, and without recording it there is nothing for the two-reads
+-- rule to confirm against. A missing trinket would then be permanently invisible
+-- -- the most expensive thing this addon exists to catch.
+Evidence.SOURCES = { "linkComplete", "socketsKnown", "tooltipComplete", "itemLoaded", "absent" }
 
 -- djb2, explicitly bounded to 2^32. The bound is not an optimisation but a
 -- correctness requirement: WoW runs Lua 5.1 where numbers are doubles with a
@@ -51,6 +56,11 @@ function Evidence.record(slotRecord, link, evidence, now)
 end
 
 function Evidence.isConfirmed(slotRecord, sources, minInterval)
+  -- No record is no evidence, which is exactly what this function reports. The
+  -- alternative is an error at a call site that is asking a reasonable question
+  -- about a player nobody has scanned yet.
+  if not slotRecord or not slotRecord.reads then return false end
+
   for i = 1, table.getn(sources) do
     local r = slotRecord.reads[sources[i]]
     if not r or r.count < 2 then return false end

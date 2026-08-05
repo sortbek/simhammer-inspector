@@ -66,6 +66,43 @@ describe("Cache pruning", function()
   end)
 end)
 
+-- The store was written on every harvest and never read back, so a /reload threw
+-- away the whole raid's gear. What makes reading it back safe is that evidence
+-- timestamps are server time rather than session-relative GetTime: a record put
+-- in one session still means the same thing when the next one opens it.
+describe("Cache round trip", function()
+  local function withEvidence()
+    local ns = helper.loadModules({
+      "SimhammerInspector/Evidence.lua", "SimhammerInspector/Cache.lua",
+    })
+    return ns, ns.Cache.new({}, { schemaVersion = 1, staleSeconds = 7200,
+                                  pruneSeconds = 2592000 })
+  end
+
+  it("keeps a slot confirmed across a restore", function()
+    local ns, c = withEvidence()
+    local slotRecord = ns.Evidence.newSlotRecord()
+    ns.Evidence.record(slotRecord, "item:1", { linkComplete = true }, 1000)
+    ns.Evidence.record(slotRecord, "item:1", { linkComplete = true }, 1020)
+
+    c:put("A", { slots = { [1] = slotRecord } }, 1020)
+
+    local restored = c:get("A")
+    assert.truthy(ns.Evidence.isConfirmed(restored.slots[1], { "linkComplete" }, 10))
+  end)
+
+  it("does not confirm a slot that was only read once before the reload", function()
+    local ns, c = withEvidence()
+    local slotRecord = ns.Evidence.newSlotRecord()
+    ns.Evidence.record(slotRecord, "item:1", { linkComplete = true }, 1000)
+
+    c:put("A", { slots = { [1] = slotRecord } }, 1000)
+
+    local restored = c:get("A")
+    assert.falsy(ns.Evidence.isConfirmed(restored.slots[1], { "linkComplete" }, 10))
+  end)
+end)
+
 describe("Cache schema migration", function()
   -- Discarding beats migrating: a half-migrated cache renders as confident data
   -- that was derived under different rules.

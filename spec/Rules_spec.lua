@@ -148,11 +148,23 @@ describe("Rules enchants", function()
     assert.is_nil(findingOfKind(findings, "low_enchant"))
   end)
 
+  -- Not silence. A check that returns no finding renders as a green cell, which
+  -- claims the enchant was verified against tables we know are out of date.
   it("degrades to unknown when the data is invalid", function()
     local ns = fresh()
     local findings = ns.Rules.evaluateSlot(1, item(parsed(7361)), confirmedRecord(ns, "a"),
                                            { minInterval = 10, dataValid = false })
     assert.is_nil(findingOfKind(findings, "low_enchant"))
+    assert.equals("unknown", findingOfKind(findings, "enchant_unverified").state)
+  end)
+
+  -- A missing enchant needs no data table to see, so stale tables must not
+  -- suppress the one enchant finding that is still trustworthy.
+  it("still reports a missing enchant when the data is invalid", function()
+    local ns = fresh()
+    local findings = ns.Rules.evaluateSlot(1, item(parsed(0)), confirmedRecord(ns, "a"),
+                                           { minInterval = 10, dataValid = false })
+    assert.equals("bad", findingOfKind(findings, "missing_enchant").state)
   end)
 end)
 
@@ -287,19 +299,101 @@ describe("Rules sockets", function()
   end)
 end)
 
+-- Two inspects that both came back with no link for this slot. This is the
+-- evidence an empty slot produces; there is no item to read, so none of the
+-- other sources can ever arrive for it.
+local function absentRecord(ns)
+  local rec = ns.Evidence.newSlotRecord()
+  ns.Evidence.record(rec, nil, { absent = true }, 100)
+  ns.Evidence.record(rec, nil, { absent = true }, 120)
+  return rec
+end
+
 describe("Rules empty slot", function()
   it("reports an empty gear slot as an error", function()
     local ns = fresh()
     local f = findingOfKind(
-      ns.Rules.evaluateSlot(1, nil, confirmedRecord(ns, "a"), CONTEXT), "missing_item")
+      ns.Rules.evaluateSlot(1, nil, absentRecord(ns), CONTEXT), "missing_item")
     assert.equals("error", f.severity)
+    assert.equals("bad", f.state)
+  end)
+
+  -- The whole point of the absence source: one read is not enough to accuse
+  -- someone of a naked slot, exactly as with every other negative finding.
+  it("holds an empty slot at unknown after a single read", function()
+    local ns = fresh()
+    local rec = ns.Evidence.newSlotRecord()
+    ns.Evidence.record(rec, nil, { absent = true }, 100)
+    local f = findingOfKind(ns.Rules.evaluateSlot(1, nil, rec, CONTEXT), "missing_item")
+    assert.equals("unknown", f.state)
+  end)
+
+  -- Regression: this finding was unreachable for the whole of its existence.
+  -- Consumers build the slot table from the harvest record, which only held
+  -- slots that returned a link, so an empty slot was not a finding -- it was a
+  -- player with fifteen slots.
+  it("reports an empty slot through the player-wide pass", function()
+    local ns = fresh()
+    local slots = { [13] = { record = absentRecord(ns) } }
+    local f = findingOfKind(ns.Rules.evaluatePlayer(slots, CONTEXT), "missing_item")
+    assert.equals(13, f.slot)
+    assert.equals("bad", f.state)
   end)
 
   it("does not report an empty off-hand when a two-hander is equipped", function()
     local ns = fresh()
-    local ctx = { minInterval = 10, dataValid = true, twoHanded = true }
-    local findings = ns.Rules.evaluateSlot(17, nil, confirmedRecord(ns, "a"), ctx)
-    assert.is_nil(findingOfKind(findings, "missing_item"))
+    local slots = {
+      [16] = { parsed = parsed(7364), record = confirmedRecord(ns, "mh"),
+               equipLoc = "INVTYPE_2HWEAPON" },
+      [17] = { record = absentRecord(ns) },
+    }
+    assert.is_nil(findingOfKind(ns.Rules.evaluatePlayer(slots, CONTEXT), "missing_item"))
+  end)
+
+  -- Neither accusing nor excusing. Without the main hand's equip location a
+  -- greatsword and a one-hander look the same, and both guesses are wrong for
+  -- half the raid.
+  it("holds an empty off-hand at unknown while the main hand's type is unread", function()
+    local ns = fresh()
+    local slots = {
+      [16] = { parsed = parsed(7364), record = confirmedRecord(ns, "mh") },
+      [17] = { record = absentRecord(ns) },
+    }
+    local f = findingOfKind(ns.Rules.evaluatePlayer(slots, CONTEXT), "missing_item")
+    assert.equals("unknown", f.state)
+  end)
+
+  it("still reports an empty off-hand beside a one-handed weapon", function()
+    local ns = fresh()
+    local slots = {
+      [16] = { parsed = parsed(7364), record = confirmedRecord(ns, "mh"),
+               equipLoc = "INVTYPE_WEAPONMAINHAND" },
+      [17] = { record = absentRecord(ns) },
+    }
+    local f = findingOfKind(ns.Rules.evaluatePlayer(slots, CONTEXT), "missing_item")
+    assert.equals(17, f.slot)
+  end)
+end)
+
+describe("Rules off-hand enchant", function()
+  -- Regression: this check read context.itemSubclass, which nothing ever set,
+  -- so isEnchantable(17, nil) was always false and an off-hand weapon was never
+  -- checked for an enchant at all.
+  it("reports a missing enchant on an off-hand weapon", function()
+    local ns = fresh()
+    local it = item(parsed(0))
+    it.classID = ns.Policy.Slots.WEAPON_CLASS_ID
+    local f = findingOfKind(
+      ns.Rules.evaluateSlot(17, it, confirmedRecord(ns, "a"), CONTEXT), "missing_enchant")
+    assert.equals("error", f.severity)
+  end)
+
+  it("reports nothing on an off-hand shield", function()
+    local ns = fresh()
+    local it = item(parsed(0))
+    it.classID = 4
+    local findings = ns.Rules.evaluateSlot(17, it, confirmedRecord(ns, "a"), CONTEXT)
+    assert.is_nil(findingOfKind(findings, "missing_enchant"))
   end)
 end)
 
@@ -398,11 +492,47 @@ describe("Rules player-wide checks", function()
     assert.matches("1 of 2", f.detail)
   end)
 
-  it("reports no embellishment finding when the data is invalid", function()
+  -- Embellishments are read off the tooltip, not out of a generated table, so a
+  -- data version this addon does not recognise is no reason to go quiet. It used
+  -- to share an early return with the tier check and silently pass everyone.
+  it("still counts embellishments when the data is invalid", function()
     local ns = fresh()
-    local findings = ns.Rules.evaluatePlayer({ [5] = slotEntry(ns, {}) },
+    local findings = ns.Rules.evaluatePlayer(
+      { [5] = slotEntry(ns, { embellished = false }) },
+      { minInterval = 10, dataValid = false })
+    assert.equals("warn", findingOfKind(findings, "embellishments_missing").severity)
+  end)
+
+  -- Tier is the opposite case: it is counted against generated set IDs, so stale
+  -- data does not merely leave it unranked, it makes the count wrong. Last
+  -- season's IDs match nobody and a fully tiered raider reads as 0 of 5.
+  it("reports tier as unverified rather than incomplete when the data is invalid", function()
+    local ns = fresh()
+    local findings = ns.Rules.evaluatePlayer(withTierSet(ns, 0),
                                              { minInterval = 10, dataValid = false })
-    assert.is_nil(findingOfKind(findings, "embellishments_missing"))
+    assert.is_nil(findingOfKind(findings, "tier_incomplete"))
+    assert.equals("unknown", findingOfKind(findings, "tier_unverified").state)
+  end)
+
+  -- Both player-wide findings used to hardcode "bad", which made them the only
+  -- ones in the file that could go red on evidence that had not arrived.
+  it("holds the tier count at unknown while a tier slot is unconfirmed", function()
+    local ns = fresh()
+    local slots = withTierSet(ns, 3)
+    slots[ns.Policy.Slots.TIER[1]].record = ns.Evidence.newSlotRecord()
+    assert.equals("unknown",
+      findingOfKind(ns.Rules.evaluatePlayer(slots, CONTEXT), "tier_incomplete").state)
+  end)
+
+  it("holds the embellishment count at unknown while a slot is unconfirmed", function()
+    local ns = fresh()
+    local slots = {
+      [5]  = slotEntry(ns, { embellished = false, link = "c1" }),
+      [10] = slotEntry(ns, { embellished = false, link = "c2" }),
+    }
+    slots[10].record = ns.Evidence.newSlotRecord()
+    assert.equals("unknown",
+      findingOfKind(ns.Rules.evaluatePlayer(slots, CONTEXT), "embellishments_missing").state)
   end)
 
   it("carries the slot number through into the player result", function()

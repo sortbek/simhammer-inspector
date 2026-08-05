@@ -33,6 +33,7 @@ Scanner.config = {
 }
 
 local LINK_SOURCES = { "linkComplete" }
+local ABSENT_SOURCES = { "absent" }
 
 local queue, cache, records
 local requestTimes = {}
@@ -75,18 +76,28 @@ local function harvest(unit, guid)
   local record = recordFor(guid)
   local returned = 0
   local stamp = serverNow()
+  local absent = {}
 
   for i = 1, table.getn(SLOTS) do
     local slot = SLOTS[i]
     local link = GetInventoryItemLink(unit, slot)
-    if link then
+    local slotRecord = record.slots[slot] or ns.Evidence.newSlotRecord()
+    record.slots[slot] = slotRecord
+
+    if not link then
+      -- A slot the inspect did not answer for is recorded rather than skipped.
+      -- Skipping it left the slot out of the record entirely, and every consumer
+      -- iterates the record -- so an empty slot was not a finding, it was a
+      -- player with fifteen slots.
+      slotRecord.itemLink = nil
+      slotRecord.item = nil
+      absent[table.getn(absent) + 1] = slotRecord
+    else
       returned = returned + 1
       local item, evidence = ns.Hydrator.build(link)
-      local slotRecord = record.slots[slot] or ns.Evidence.newSlotRecord()
       ns.Evidence.record(slotRecord, link, evidence, stamp)
       slotRecord.itemLink = link
       slotRecord.item = item
-      record.slots[slot] = slotRecord
 
       -- The harvest has to be synchronous -- GetInventoryItemLink is only valid
       -- inside this handler -- but an item the client has not cached yet has no
@@ -103,6 +114,18 @@ local function harvest(unit, guid)
           current.item = rebuilt
         end)
       end
+    end
+  end
+
+  -- Absence is only concluded from a pass that clearly read the whole character.
+  -- A thin pass looks exactly like a naked raider, and two thin passes ten
+  -- seconds apart would confirm it -- turning a partial answer into sixteen red
+  -- cells. Evidence.record resets the counters when the fingerprint changes, and
+  -- an empty slot fingerprints as nil, so equipping or removing an item starts
+  -- the two-read rule over on its own.
+  if returned >= ns.Policy.Slots.MIN_COMPLETE_PASS then
+    for i = 1, table.getn(absent) do
+      ns.Evidence.record(absent[i], nil, { absent = true }, stamp)
     end
   end
 
@@ -126,11 +149,15 @@ local function harvest(unit, guid)
   return returned
 end
 
+-- An empty slot confirms on its own source. Judging it by linkComplete, which
+-- can never arrive for a slot with no item, would mean a player wearing a
+-- two-hander could never reach the confirmed state at all.
 local function allSlotsConfirmed(record)
   local confirmed, seen = 0, 0
   for _, slotRecord in pairs(record.slots) do
     seen = seen + 1
-    if ns.Evidence.isConfirmed(slotRecord, LINK_SOURCES, Scanner.config.minInterval) then
+    local sources = slotRecord.itemLink and LINK_SOURCES or ABSENT_SOURCES
+    if ns.Evidence.isConfirmed(slotRecord, sources, Scanner.config.minInterval) then
       confirmed = confirmed + 1
     end
   end
