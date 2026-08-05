@@ -1,9 +1,9 @@
 local helper = dofile("spec/helper.lua")
 
 local MODULES = {
-  "SimhammerInspector/Policy/Slots.lua",
-  "SimhammerInspector/Evidence.lua",
-  "SimhammerInspector/Scanner.lua",
+  "Policy/Slots.lua",
+  "Evidence.lua",
+  "Scanner.lua",
 }
 
 -- Scanner touches no WoW API while loading, so it can be brought up here as long

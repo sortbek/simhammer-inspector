@@ -22,7 +22,7 @@ describe("test harness", function()
   -- the harness.
   it("loads a module with the addon namespace", function()
     local helper = dofile("spec/helper.lua")
-    local ns = helper.loadModules({ "SimhammerInspector/Version.lua" })
+    local ns = helper.loadModules({ "Version.lua" })
     assert.equals("function", type(ns.readVersion))
   end)
 end)

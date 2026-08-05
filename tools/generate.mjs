@@ -1,4 +1,4 @@
-// Generates SimhammerInspector/Data/*.lua from the wago.tools DB2 CSV snapshots in
+// Generates Data/*.lua from the wago.tools DB2 CSV snapshots in
 // tools/csv/. Run with:
 //
 //   node tools/generate.mjs                 (uses the checked-in snapshots)

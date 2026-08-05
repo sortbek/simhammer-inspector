@@ -40,8 +40,9 @@ already fine is worse than saying nothing.
 
 ## Building
 
-The addon is the `SimhammerInspector` folder; everything else in this repository
-is development tooling.
+The addon is the repository root — `SimhammerInspector.toc` and everything it
+lists. `spec`, `tools`, `spike` and `docs` are development only and are left out
+of releases by [.pkgmeta](.pkgmeta).
 
 ```
 tools\test.ps1        # run the test suite (Lua 5.1, bundled)

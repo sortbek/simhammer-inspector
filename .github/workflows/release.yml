@@ -23,11 +23,8 @@ jobs:
 
       - name: Package and publish
         uses: BigWigsMods/packager@v2
-        with:
-          # -t points the packager at the addon folder rather than the repo
-          # root, so spec, tools, spike and docs are excluded by never being
-          # looked at. No ignore list to fall out of date.
-          args: -t SimhammerInspector
+        # No arguments: the addon is the repository root, so the packager finds
+        # the TOC beside .git on its own and .pkgmeta says what to leave out.
         env:
           # Creates the GitHub release and attaches the zip.
           GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}

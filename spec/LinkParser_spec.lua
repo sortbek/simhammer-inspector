@@ -2,7 +2,7 @@ local helper = dofile("spec/helper.lua")
 local links  = dofile("spec/fixtures/links.lua")
 
 local function parser()
-  return helper.loadModules({ "SimhammerInspector/LinkParser.lua" }).LinkParser
+  return helper.loadModules({ "LinkParser.lua" }).LinkParser
 end
 
 describe("LinkParser fixed fields", function()

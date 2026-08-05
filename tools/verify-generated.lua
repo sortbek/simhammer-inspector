@@ -15,10 +15,10 @@ local db = assert(env.SimhammerInspectorSpikeDB, "no SimhammerInspectorSpikeDB f
 
 local ns = {}
 for _, path in ipairs({
-  "SimhammerInspector/LinkParser.lua",
-  "SimhammerInspector/Data/Enchants.lua",
-  "SimhammerInspector/Data/Gems.lua",
-  "SimhammerInspector/Data/Version.lua",
+  "LinkParser.lua",
+  "Data/Enchants.lua",
+  "Data/Gems.lua",
+  "Data/Version.lua",
 }) do
   assert(loadfile(path), "could not load " .. path)("SimhammerInspector", ns)
 end

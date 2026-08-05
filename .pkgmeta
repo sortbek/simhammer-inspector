@@ -1,0 +1,15 @@
+# The addon is the repository root, which is what the packager expects: it finds
+# SimhammerInspector.toc beside .git and names the package after it.
+#
+# Everything listed here is development tooling that has no business in a zip a
+# raider downloads. Folders beginning with a dot are dropped by the packager
+# without being named, so .github and .git are not listed.
+#
+# README.md and LICENSE stay in: the packager turns the readme into the
+# CurseForge description, and shipping the licence with the code is the point of
+# having one.
+ignore:
+  - spec
+  - tools
+  - spike
+  - docs

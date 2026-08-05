@@ -1,7 +1,7 @@
 local helper = dofile("spec/helper.lua")
 
 local function queue(overrides)
-  local ns = helper.loadModules({ "SimhammerInspector/ScanQueue.lua" })
+  local ns = helper.loadModules({ "ScanQueue.lua" })
   local config = {
     timeoutSeconds       = 3,
     backoffBase          = 5,

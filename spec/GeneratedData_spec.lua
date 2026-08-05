@@ -6,10 +6,10 @@ local helper = dofile("spec/helper.lua")
 -- people to edit tests instead of thinking.
 local function data()
   return helper.loadModules({
-    "SimhammerInspector/Data/Enchants.lua",
-    "SimhammerInspector/Data/Gems.lua",
-    "SimhammerInspector/Data/Version.lua",
-    "SimhammerInspector/Data/TierSets.lua",
+    "Data/Enchants.lua",
+    "Data/Gems.lua",
+    "Data/Version.lua",
+    "Data/TierSets.lua",
   }).Data
 end
 

@@ -2,7 +2,7 @@ local helper   = dofile("spec/helper.lua")
 local tooltips = dofile("spec/fixtures/tooltips.lua")
 
 local function adapter()
-  return helper.loadModules({ "SimhammerInspector/UpgradeTrackAdapter.lua" }).UpgradeTrackAdapter
+  return helper.loadModules({ "UpgradeTrackAdapter.lua" }).UpgradeTrackAdapter
 end
 
 local function pattern()

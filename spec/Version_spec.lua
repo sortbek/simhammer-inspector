@@ -1,7 +1,7 @@
 local helper = dofile("spec/helper.lua")
 
 local function versionModule()
-  return helper.loadModules({ "SimhammerInspector/Version.lua" })
+  return helper.loadModules({ "Version.lua" })
 end
 
 describe("addon version", function()

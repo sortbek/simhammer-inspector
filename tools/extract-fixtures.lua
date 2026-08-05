@@ -12,7 +12,7 @@ chunk()
 local db = assert(env.SimhammerInspectorSpikeDB, "no SimhammerInspectorSpikeDB found")
 
 local ns = {}
-assert(loadfile("SimhammerInspector/LinkParser.lua"))("SimhammerInspector", ns)
+assert(loadfile("LinkParser.lua"))("SimhammerInspector", ns)
 local parse = ns.LinkParser.parse
 
 local function has(tooltip, needle)
