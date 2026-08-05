@@ -31,6 +31,7 @@ jobs:
           # Absent until a CurseForge project exists, and the packager simply
           # skips that upload when it is. That is what makes the first tag a
           # safe dry run: a real zip to inspect, published nowhere.
-          # Wiring it up later takes a repo secret and an
-          # "## X-Curse-Project-ID:" line in the TOC. This file stays as is.
+          #
+          # To wire it up: add the token as a repo secret, then pass the project
+          # id with "args: -p <id>" above.
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
