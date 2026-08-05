@@ -1,6 +1,9 @@
 ## Interface: 120007
 ## Title: Simhammer Inspector
 ## Notes: Live raid gear inspection.
+## Author: sortbek
+## Version: @project-version@
+## X-License: MIT
 ## SavedVariablesPerCharacter: SimhammerInspectorDB
 
 Version.lua

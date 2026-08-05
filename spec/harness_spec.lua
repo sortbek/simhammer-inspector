@@ -16,9 +16,13 @@ describe("test harness", function()
     assert.matches("%.a%.b", err)
   end)
 
+  -- Asserts that the chunk ran and wrote into the shared namespace, not what it
+  -- wrote: the version number comes from the git tag now, so pinning a literal
+  -- here would fail on every release for reasons that have nothing to do with
+  -- the harness.
   it("loads a module with the addon namespace", function()
     local helper = dofile("spec/helper.lua")
     local ns = helper.loadModules({ "SimhammerInspector/Version.lua" })
-    assert.equals("0.1.0", ns.VERSION)
+    assert.equals("function", type(ns.readVersion))
   end)
 end)
