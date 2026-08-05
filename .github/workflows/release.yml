@@ -1,11 +1,13 @@
 name: Release
 
 # Tag-driven: the tag is the version number, so nothing here has to be edited to
-# cut a release.
+# cut a release. Tags carry no "v" prefix, because the packager copies the tag
+# into the TOC verbatim and "## Version: v0.1.0" is not what an addon list should
+# read. Matching every tag rather than a prefix is what lets that work.
 on:
   push:
     tags:
-      - "v*"
+      - "*"
 
 permissions:
   contents: write
