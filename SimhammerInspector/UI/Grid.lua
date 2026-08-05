@@ -580,9 +580,9 @@ function Grid.create()
     ns.Core.reportToChat()
   end, "Print the findings to chat."), reset)
 
-  place(ns.Theme.button(toolbar, "SimC DPS", 72, function()
+  place(ns.Theme.button(toolbar, "SimC", 54, function()
     ns.Core.exportSimc()
-  end, "SimulationCraft profiles for every DPS, ready to paste."), report)
+  end, "SimulationCraft profiles, ready to paste. Pick which roles in the export window."), report)
 
   sortButton = ns.Theme.button(toolbar, "sort: issues", 88, function(self)
     sortMode = (sortMode == "issues") and "name" or "issues"

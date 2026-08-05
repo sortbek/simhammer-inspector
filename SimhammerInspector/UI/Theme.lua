@@ -168,6 +168,45 @@ function Theme.button(parent, label, width, onClick, tooltip)
   return b
 end
 
+-- A small labelled toggle. Same reasoning as Theme.button: defined once so the
+-- controls behave identically wherever they appear.
+function Theme.checkbox(parent, label, width, isChecked, onToggle)
+  local b = CreateFrame("Button", nil, parent)
+  b:SetSize(width, 18)
+
+  b.box = b:CreateTexture(nil, "ARTWORK")
+  b.box:SetSize(11, 11)
+  b.box:SetPoint("LEFT", b, "LEFT", 2, 0)
+
+  b.text = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  b.text:SetPoint("LEFT", b.box, "RIGHT", 5, 0)
+  b.text:SetJustifyH("LEFT")
+  b.text:SetText(label)
+
+  function b:Refresh()
+    if isChecked() then
+      self.box:SetColorTexture(Theme.colour.accent[1], Theme.colour.accent[2],
+                               Theme.colour.accent[3], 0.9)
+      Theme.setText(self.text, Theme.colour.textPrimary)
+    else
+      self.box:SetColorTexture(1, 1, 1, 0.09)
+      Theme.setText(self.text, Theme.colour.textFaint)
+    end
+  end
+
+  b:SetScript("OnClick", function(self)
+    onToggle()
+    self:Refresh()
+  end)
+  b:SetScript("OnEnter", function(self)
+    if not isChecked() then Theme.setText(self.text, Theme.colour.textMuted) end
+  end)
+  b:SetScript("OnLeave", function(self) self:Refresh() end)
+
+  b:Refresh()
+  return b
+end
+
 function Theme.setText(fontString, colour)
   fontString:SetTextColor(colour[1], colour[2], colour[3], colour[4] or 1)
 end

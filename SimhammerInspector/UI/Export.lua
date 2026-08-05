@@ -6,6 +6,7 @@ ns.Export = Export
 local C = ns.Theme.colour
 
 local frame, editBox, statusText, skippedText
+local roleBoxes = {}
 
 local function create()
   if frame then return end
@@ -42,19 +43,51 @@ local function create()
   close:SetSize(24, 24)
   close:SetScript("OnClick", function() frame:Hide() end)
 
+  -- The toggles live here rather than being asked before the window opens: you
+  -- usually find out you wanted tanks in it by looking at what you got, and
+  -- re-running from the grid to change your mind is a worse loop.
+  local roleBar = CreateFrame("Frame", nil, frame)
+  roleBar:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -30)
+  roleBar:SetSize(400, 18)
+
+  local roleLabel = roleBar:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  roleLabel:SetPoint("LEFT", roleBar, "LEFT", 0, 0)
+  roleLabel:SetText("include")
+  ns.Theme.setText(roleLabel, C.textFaint)
+
+  local previous = nil
+  for i = 1, table.getn(ns.Core.ROLE_ORDER) do
+    local role = ns.Core.ROLE_ORDER[i]
+    local box = ns.Theme.checkbox(roleBar, ns.Core.ROLE_LABELS[role], 72,
+      function() return ns.Core.simcRoles()[role] end,
+      function()
+        ns.Core.toggleSimcRole(role)
+        -- Rebuilds straight away, so the effect of a toggle is the text in front
+        -- of you rather than something you have to go and re-trigger.
+        ns.Core.exportSimc()
+      end)
+    if previous then
+      box:SetPoint("LEFT", previous, "RIGHT", 6, 0)
+    else
+      box:SetPoint("LEFT", roleLabel, "RIGHT", 10, 0)
+    end
+    previous = box
+    roleBoxes[table.getn(roleBoxes) + 1] = box
+  end
+
   statusText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  statusText:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -32)
+  statusText:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -52)
   statusText:SetJustifyH("LEFT")
 
   skippedText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  skippedText:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -48)
+  skippedText:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -68)
   skippedText:SetPoint("RIGHT", frame, "RIGHT", -12, 0)
   skippedText:SetJustifyH("LEFT")
   ns.Theme.setText(skippedText, C.textFaint)
 
   local scroll = CreateFrame("ScrollFrame", "SimhammerInspectorExportScroll", frame,
                              "UIPanelScrollFrameTemplate")
-  scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -66)
+  scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -86)
   scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -30, 12)
 
   editBox = CreateFrame("EditBox", nil, scroll)
@@ -86,13 +119,23 @@ end
 function Export.show(text, skipped, exported)
   create()
 
+  for i = 1, table.getn(roleBoxes) do roleBoxes[i]:Refresh() end
+
   editBox.payload = text
   editBox:SetText(text)
 
-  statusText:SetText(string.format("%d profiles  \194\183  Ctrl+C copies and closes", exported))
   if exported > 0 then
+    statusText:SetText(string.format("%d profiles  \194\183  Ctrl+C copies and closes", exported))
     statusText:SetTextColor(0.36, 0.74, 0.46)
   else
+    -- Nothing selected and nothing matched look identical in an empty box, so
+    -- say which of the two it is.
+    local anyRole = false
+    for _, on in pairs(ns.Core.simcRoles()) do
+      if on then anyRole = true break end
+    end
+    statusText:SetText(anyRole and "no players matched those roles yet"
+                                or "no roles selected")
     statusText:SetTextColor(0.92, 0.70, 0.18)
   end
 

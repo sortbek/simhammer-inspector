@@ -298,17 +298,32 @@ local function showBundle(players)
   ns.Export.show(text, skipped, table.getn(players) - table.getn(skipped))
 end
 
--- DPS only, as requested: tanks and healers are rarely simmed, and every extra
--- profile is more text to paste. Solo, nobody has an assigned role, so you are
--- included regardless -- otherwise the export is empty outside a group and
--- cannot be tried at all.
+-- Which roles go into the export. Persisted per character, because whoever sims
+-- their tanks tends to keep doing that.
+Core.ROLE_ORDER = { "DAMAGER", "TANK", "HEALER" }
+Core.ROLE_LABELS = { DAMAGER = "DPS", TANK = "Tanks", HEALER = "Healers" }
+
+function Core.simcRoles()
+  SimhammerInspectorDB.simcRoles = SimhammerInspectorDB.simcRoles
+                                   or { DAMAGER = true, TANK = false, HEALER = false }
+  return SimhammerInspectorDB.simcRoles
+end
+
+function Core.toggleSimcRole(role)
+  local roles = Core.simcRoles()
+  roles[role] = not roles[role]
+end
+
+-- Solo, nobody has an assigned role, so you are included regardless -- otherwise
+-- the export is empty outside a group and cannot be tried at all.
 function Core.exportSimc()
   local players = {}
+  local roles = Core.simcRoles()
   local solo = not (IsInGroup and IsInGroup())
   local ownGuid = UnitGUID("player")
 
   for guid, info in pairs(ns.Roster.all()) do
-    if info.role == "DAMAGER" or (solo and guid == ownGuid) then
+    if roles[info.role or ""] or (solo and guid == ownGuid) then
       local p = simcPlayer(guid)
       if p then players[table.getn(players) + 1] = p end
     end
