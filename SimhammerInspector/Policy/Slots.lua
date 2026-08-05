@@ -50,13 +50,18 @@ Slots.TIER = { HEAD, SHOULDER, CHEST, HANDS, LEGS }
 Slots.MAINHAND = MAINHAND
 Slots.OFFHAND = OFFHAND
 
--- How many of the sixteen slots an inspect must return before the pass is
--- treated as a complete read of the character. A raider fills at least fourteen,
--- so a thinner pass is a partial answer rather than a sparsely geared player.
--- Both consumers depend on the same judgement: the queue counts a substantial
--- pass as progress, and the scanner only concludes a slot is empty from a pass
--- that clearly saw the whole character.
-Slots.MIN_COMPLETE_PASS = 10
+-- How many of the sixteen slots an inspect must return before the pass counts as
+-- a complete read of the character, which is what absence findings are concluded
+-- from. A raider fills every slot: sixteen normally, fifteen with a two-hander.
+-- So the realistic fault -- a forgotten ring or trinket -- returns fifteen or
+-- fourteen, and fourteen is the floor that still catches it.
+--
+-- Deliberately not the queue's substantialPassSlots, though the two started out
+-- sharing a number. They answer different questions: the queue asks whether it
+-- learned enough to count the pass as progress, this asks whether the pass saw
+-- the whole character well enough to call a slot empty. The second is the
+-- stricter question, because being wrong means accusing someone.
+Slots.MIN_COMPLETE_PASS = 14
 
 -- Midnight season 1: cloak and bracers dropped out, helm and shoulders came
 -- back. Legs carry a spellthread, which lands in the same enchantID field.

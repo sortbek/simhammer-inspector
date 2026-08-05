@@ -328,6 +328,19 @@ describe("Rules empty slot", function()
     assert.equals("unknown", f.state)
   end)
 
+  -- The property that makes the scanner's completeness threshold safe to set
+  -- high: a slot the scanner declined to record an absence for still produces
+  -- the finding, held at unknown. Suppressing the evidence delays the verdict,
+  -- it never manufactures a pass. Nobody in a raid should have an empty slot, so
+  -- an empty one going quietly green would be the worst outcome available.
+  it("shows an empty slot as unknown rather than clean when no pass confirmed it", function()
+    local ns = fresh()
+    local f = findingOfKind(
+      ns.Rules.evaluateSlot(1, nil, ns.Evidence.newSlotRecord(), CONTEXT), "missing_item")
+    assert.truthy(f)
+    assert.equals("unknown", f.state)
+  end)
+
   -- Regression: this finding was unreachable for the whole of its existence.
   -- Consumers build the slot table from the harvest record, which only held
   -- slots that returned a link, so an empty slot was not a finding -- it was a

@@ -20,7 +20,10 @@ local QUEUE_CONFIG = {
   -- of them was enough to write off eight raiders who were standing next to us.
   unreachableAfter     = 10,
   reconfirmSeconds     = 600,
-  substantialPassSlots = ns.Policy.Slots.MIN_COMPLETE_PASS,
+  -- Scheduling only, and a lower bar than Slots.MIN_COMPLETE_PASS on purpose: a
+  -- pass that read ten slots taught us something worth backing off on, even
+  -- though it is not enough to conclude the six it missed are empty.
+  substantialPassSlots = 10,
 }
 
 local queue, cache
