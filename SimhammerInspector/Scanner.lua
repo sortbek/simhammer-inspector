@@ -413,8 +413,23 @@ local function tick()
   NotifyInspect(info.unit)
 end
 
+-- Combat and encounter state reach this file as events, and both of those fire
+-- when the pull starts -- which for a mid-pull /reload is before this addon
+-- exists. Starting from "not in combat" therefore meant coming back and
+-- inspecting straight through the encounter the pause below exists to stay out
+-- of. The client is asked instead of assumed.
+--
+-- The encounter half is not redundant: a raider who reloads while dead is not
+-- personally in combat, and the pull is still running.
+function Scanner.inCombat()
+  if InCombatLockdown and InCombatLockdown() then return true end
+  if IsEncounterInProgress and IsEncounterInProgress() then return true end
+  return false
+end
+
 function Scanner.init(q, c, r)
   queue, cache, records = q, c, r
+  paused = Scanner.inCombat()
 
   frame = CreateFrame("Frame")
   frame:RegisterEvent("INSPECT_READY")
