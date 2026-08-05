@@ -1,0 +1,27 @@
+name: Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  # Called by the release workflow, so a tag cannot publish a build that does
+  # not pass. Defining the suite once means the two can never diverge on what
+  # "passing" meant.
+  workflow_call:
+
+jobs:
+  spec:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # tools/lua holds a Windows interpreter for local runs; the runner needs
+      # its own. Same language version, which is the part that matters -- the
+      # addon targets WoW's Lua 5.1 and the suite asserts on that.
+      - name: Install Lua 5.1
+        run: sudo apt-get update && sudo apt-get install -y lua5.1
+
+      # The same invocation tools/test.ps1 makes: the runner takes spec files as
+      # arguments and the specs resolve their fixtures from the repository root.
+      - name: Run the suite
+        run: lua5.1 tools/run-tests.lua spec/*_spec.lua

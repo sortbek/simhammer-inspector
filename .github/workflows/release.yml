@@ -13,7 +13,15 @@ permissions:
   contents: write
 
 jobs:
+  # A tag was able to publish without anything having run the suite. Reusing the
+  # test workflow rather than repeating its steps means there is one definition
+  # of what passing means, and the release gate cannot drift from the one that
+  # runs on every push.
+  test:
+    uses: ./.github/workflows/tests.yml
+
   package:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
