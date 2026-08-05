@@ -34,13 +34,18 @@ local selectedGuid
 local lastScanMarker
 
 local function gridWidth()
-  return M.nameWidth + M.ilvlWidth + M.embWidth
+  return M.nameWidth + M.ilvlWidth + M.tierWidth + M.embWidth
          + (table.getn(SLOTS) * (M.cellSize + M.cellGap))
          + M.summaryWidth
 end
 
+-- Where the counter columns start, so the three places that need to line up
+-- against them cannot drift apart by one width.
+local function tierX() return M.nameWidth + M.ilvlWidth end
+local function embX()  return tierX() + M.tierWidth end
+
 local function cellX(index)
-  return M.nameWidth + M.ilvlWidth + M.embWidth + (index - 1) * (M.cellSize + M.cellGap)
+  return embX() + M.embWidth + (index - 1) * (M.cellSize + M.cellGap)
 end
 
 local function makeCell(parent, index)
@@ -136,11 +141,17 @@ local function makeRow(index)
   row.ilvl:SetWidth(M.ilvlWidth - 8)
   row.ilvl:SetJustifyH("LEFT")
 
-  -- Embellishments get their own column rather than living inside a per-slot
-  -- cell: the cap is two across the whole character, so it is a property of the
-  -- player, and every raider is expected to be at 2 of 2.
+  -- Tier and embellishments get their own columns rather than living inside a
+  -- per-slot cell: both are properties of the whole character, so neither has a
+  -- cell to colour. Tier used to have nowhere to appear at all, which left its
+  -- warning showing as a number in the summary with every cell in the row green.
+  row.tier = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  row.tier:SetPoint("LEFT", row, "LEFT", tierX(), 0)
+  row.tier:SetWidth(M.tierWidth - 6)
+  row.tier:SetJustifyH("LEFT")
+
   row.emb = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  row.emb:SetPoint("LEFT", row, "LEFT", M.nameWidth + M.ilvlWidth, 0)
+  row.emb:SetPoint("LEFT", row, "LEFT", embX(), 0)
   row.emb:SetWidth(M.embWidth - 6)
   row.emb:SetJustifyH("LEFT")
 
@@ -294,6 +305,26 @@ function Grid.updateRow(index, entry)
   else
     row.ilvl:SetText("--")
     ns.Theme.setText(row.ilvl, C.textFaint)
+  end
+
+  -- Capped at what is required rather than at what exists: a fifth tier piece is
+  -- welcome but not something to report as 5/4, and 4/4 is the state everyone is
+  -- being measured against.
+  local tier = entry.tier
+  if not tier then
+    row.tier:SetText("--")
+    ns.Theme.setText(row.tier, C.textFaint)
+  elseif tier.worn >= tier.required then
+    row.tier:SetText(tier.required .. "/" .. tier.required)
+    row.tier:SetTextColor(0.36, 0.74, 0.46)
+  elseif not tier.confirmed then
+    -- A slot that has not been read yet could be holding tier, so the count is a
+    -- floor. Same "?" the embellishment column uses for the same reason.
+    row.tier:SetText(tier.worn .. "/" .. tier.required .. "?")
+    ns.Theme.setText(row.tier, C.textFaint)
+  else
+    row.tier:SetText(tier.worn .. "/" .. tier.required)
+    row.tier:SetTextColor(0.92, 0.70, 0.18)
   end
 
   local emb = entry.embellishments
@@ -459,7 +490,8 @@ local function buildHeader()
 
   label("PLAYER", 8, M.nameWidth - 8)
   label("ILVL", M.nameWidth, M.ilvlWidth)
-  label("EMB", M.nameWidth + M.ilvlWidth, M.embWidth)
+  label("TIER", tierX(), M.tierWidth)
+  label("EMB", embX(), M.embWidth)
 
   -- Icons rather than two-letter abbreviations. The abbreviations had to be
   -- learned, and worse, wide pairs like "MH" did not fit the column and were

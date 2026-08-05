@@ -442,12 +442,48 @@ describe("Rules player-wide checks", function()
     assert.is_nil(findingOfKind(findings, "tier_incomplete"))
   end)
 
-  it("reports three of five tier pieces as a warning", function()
+  -- Four is the set bonus that decides the sim; the fifth piece is a stat gain,
+  -- not a raid-readiness question. Counting against five put a yellow warning on
+  -- correctly geared raiders, with nothing anywhere in the grid to explain it.
+  it("reports nothing at four of five tier pieces", function()
+    local ns = fresh()
+    assert.is_nil(findingOfKind(
+      ns.Rules.evaluatePlayer(withTierSet(ns, 4), CONTEXT), "tier_incomplete"))
+  end)
+
+  it("counts tier against the four that are required, not the five that exist", function()
     local ns = fresh()
     local f = findingOfKind(
       ns.Rules.evaluatePlayer(withTierSet(ns, 3), CONTEXT), "tier_incomplete")
     assert.equals("warn", f.severity)
-    assert.matches("3", f.detail)
+    assert.matches("3 of 4", f.detail)
+  end)
+
+  -- The grid column needs the count as numbers rather than as a sentence, and
+  -- asking the same question in a second place is how a column and a warning end
+  -- up disagreeing about the same player.
+  it("hands the tier count to the grid", function()
+    local ns = fresh()
+    local tier = ns.Rules.tierStatus(withTierSet(ns, 3), CONTEXT)
+    assert.equals(3, tier.worn)
+    assert.equals(4, tier.required)
+    assert.equals(true, tier.confirmed)
+  end)
+
+  it("reports the tier count as unconfirmed while a tier slot is unread", function()
+    local ns = fresh()
+    local slots = withTierSet(ns, 3)
+    slots[ns.Policy.Slots.TIER[1]].record = ns.Evidence.newSlotRecord()
+    assert.equals(false, ns.Rules.tierStatus(slots, CONTEXT).confirmed)
+  end)
+
+  -- Same reason the finding turns into tier_unverified: last season's IDs match
+  -- nobody, so a fully tiered raider would read as 0 of 4. An empty column is
+  -- honest where a wrong number is not.
+  it("has no tier count while the data is out of date for this build", function()
+    local ns = fresh()
+    assert.is_nil(ns.Rules.tierStatus(withTierSet(ns, 3),
+                                      { minInterval = 10, dataValid = false }))
   end)
 
   it("reports no tier finding while the set IDs are unset", function()
@@ -459,6 +495,7 @@ describe("Rules player-wide checks", function()
       slots[tierSlots[i]] = slotEntry(ns, { link = "x" .. i })
     end
     assert.is_nil(findingOfKind(ns.Rules.evaluatePlayer(slots, CONTEXT), "tier_incomplete"))
+    assert.is_nil(ns.Rules.tierStatus(slots, CONTEXT))
   end)
 
   it("reports zero embellishments as a warning", function()

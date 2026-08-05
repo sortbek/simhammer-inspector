@@ -91,6 +91,7 @@ Theme.metrics = {
   iconSize     = 14,
   nameWidth    = 148,
   ilvlWidth    = 46,
+  tierWidth    = 34,
   embWidth     = 34,
   summaryWidth = 40,
   padding      = 12,

@@ -171,7 +171,9 @@ function Rules.evaluateSlot(slot, item, slotRecord, context)
 end
 
 -- Tier and embellishments are the first checks that cannot be judged per slot:
--- you can only say someone wears 3 of 5 tier pieces once all five slots are in.
+-- you can only say how many tier pieces someone wears once all five slots are
+-- in. Counts what is worn, not what is enough -- the threshold is Season's to
+-- decide, and it is four rather than five.
 local function countTierPieces(slots)
   local setIDs = ns.Policy.Season.TIER_SET_IDS
   if not next(setIDs) then return nil end
@@ -184,7 +186,7 @@ local function countTierPieces(slots)
       worn = worn + 1
     end
   end
-  return worn, table.getn(tierSlots)
+  return worn
 end
 
 -- Counts embellished items from what the tooltip says about each one, rather
@@ -225,6 +227,26 @@ local function tierConfirmed(slots, context)
     if not entryConfirmed(slots[tierSlots[i]], context) then return false end
   end
   return true
+end
+
+-- The tier count as numbers rather than as a sentence, for the grid's column.
+-- Both the column and the warning below read this, because a column that says
+-- 4/4 beside a warning that says otherwise is worse than having neither.
+--
+-- Nil means the question cannot be answered rather than that the answer is zero:
+-- without trustworthy set IDs a fully tiered raider counts as wearing none, and
+-- an empty column is honest where a wrong number is not.
+function Rules.tierStatus(slots, context)
+  if not context.dataValid then return nil end
+
+  local worn = countTierPieces(slots)
+  if not worn then return nil end
+
+  return {
+    worn = worn,
+    required = ns.Policy.Season.TIER_PIECES_REQUIRED,
+    confirmed = tierConfirmed(slots, context),
+  }
 end
 
 -- Embellishments are counted over every slot that has an item, so every one of
@@ -280,11 +302,11 @@ function Rules.evaluatePlayer(slots, context)
   if not context.dataValid then
     unverified(findings, nil, "tier_unverified", "tier set")
   else
-    local worn, total = countTierPieces(slots)
-    if worn and worn < total then
+    local tier = Rules.tierStatus(slots, context)
+    if tier and tier.worn < tier.required then
       add(findings, nil, "tier_incomplete", "warn",
-          tierConfirmed(slots, context) and "bad" or "unknown",
-          worn .. " of " .. total .. " tier pieces")
+          tier.confirmed and "bad" or "unknown",
+          tier.worn .. " of " .. tier.required .. " tier pieces")
     end
   end
 

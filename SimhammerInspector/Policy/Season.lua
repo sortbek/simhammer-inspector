@@ -12,6 +12,12 @@ Season.CURRENT_TIER = "midnight-s1"
 
 Season.MAX_EMBELLISHMENTS = 2
 
+-- Four, not five. The four-piece bonus is what changes how a spec plays; the
+-- fifth piece is a stat upgrade you take when it drops, not something to hold a
+-- pull over. Counting against five put a warning on raiders wearing exactly what
+-- they should be, and the grid had no column to explain it with.
+Season.TIER_PIECES_REQUIRED = 4
+
 -- Points at the generated table rather than restating it. Which sets are the
 -- current tier turned out to be derivable -- five-piece sets in the current item
 -- ID block -- so hand-copying thirteen IDs would only introduce a second source

@@ -91,7 +91,10 @@ local function findingsFor(guid)
     }
   end
 
-  return ns.Rules.evaluatePlayer(slots, context())
+  -- The slot view goes back out with the findings so the tier column can be
+  -- asked for off the same table, rather than being built a second time one
+  -- function up.
+  return ns.Rules.evaluatePlayer(slots, context()), slots
 end
 
 local ALL_SLOTS = ns.Policy.Slots.ALL
@@ -139,7 +142,10 @@ function Core.entryFor(guid)
 
   entry.stale = cache and cache:isStale(guid, time()) or false
 
-  local findings = findingsFor(guid) or {}
+  local findings, slotView = findingsFor(guid)
+  findings = findings or {}
+  entry.tier = slotView and ns.Rules.tierStatus(slotView, context()) or nil
+
   local bySlot = {}
   for i = 1, table.getn(findings) do
     local f = findings[i]
