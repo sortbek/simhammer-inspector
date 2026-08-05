@@ -16,7 +16,7 @@ jobs:
   package:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The packager works the version out of the tag and builds the
           # changelog from the commits since the previous one. A shallow clone
@@ -34,6 +34,6 @@ jobs:
           # skips that upload when it is. That is what makes the first tag a
           # safe dry run: a real zip to inspect, published nowhere.
           #
-          # To wire it up: add the token as a repo secret, then pass the project
-          # id with "args: -p <id>" above.
+          # To wire it up: add the token as a repo secret and put the project id
+          # in the TOC as "## X-Curse-Project-ID:". This file needs no edit.
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
