@@ -154,6 +154,11 @@ function Theme.button(parent, label, width, onClick, tooltip)
   local b = CreateFrame("Button", nil, parent)
   b:SetSize(width, 18)
 
+  -- Read on hover rather than captured, so a button whose reason for being
+  -- unusable changes can say the current one.
+  b.tooltip = tooltip
+  b.usable = true
+
   b.bg = b:CreateTexture(nil, "BACKGROUND")
   b.bg:SetAllPoints()
   b.bg:SetColorTexture(1, 1, 1, 0.05)
@@ -164,24 +169,42 @@ function Theme.button(parent, label, width, onClick, tooltip)
   b.text:SetText(label)
   Theme.setText(b.text, Theme.colour.textMuted)
 
+  -- Not named SetEnabled: that is a real method on Button widgets, and an
+  -- instance field shadowing it would leave two disabled states disagreeing
+  -- about which one the button is in. An unusable button still takes the mouse,
+  -- because the tooltip explaining why is the whole point of the state.
+  function b:SetUsable(usable)
+    self.usable = usable and true or false
+    Theme.setText(self.text, self.usable and Theme.colour.textMuted
+                                          or Theme.colour.textFaint)
+  end
+
+  function b:SetTooltip(text)
+    self.tooltip = text
+  end
+
   b:SetScript("OnEnter", function(self)
-    self.bg:SetColorTexture(1, 1, 1, 0.11)
-    Theme.setText(self.text, Theme.colour.textPrimary)
-    if tooltip then
+    if self.usable then
+      self.bg:SetColorTexture(1, 1, 1, 0.11)
+      Theme.setText(self.text, Theme.colour.textPrimary)
+    end
+    if self.tooltip then
       GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
       GameTooltip:AddLine(label)
-      GameTooltip:AddLine(tooltip, 0.7, 0.7, 0.7, true)
+      GameTooltip:AddLine(self.tooltip, 0.7, 0.7, 0.7, true)
       GameTooltip:Show()
     end
   end)
 
   b:SetScript("OnLeave", function(self)
     self.bg:SetColorTexture(1, 1, 1, 0.05)
-    Theme.setText(self.text, Theme.colour.textMuted)
+    Theme.setText(self.text, self.usable and Theme.colour.textMuted
+                                          or Theme.colour.textFaint)
     GameTooltip:Hide()
   end)
 
-  b:SetScript("OnClick", function()
+  b:SetScript("OnClick", function(self)
+    if not self.usable then return end
     local ok, err = pcall(onClick)
     if not ok then
       DEFAULT_CHAT_FRAME:AddMessage("|cffff4444Simhammer|r " .. tostring(err))

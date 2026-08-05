@@ -93,11 +93,14 @@ function SimcExport.itemLine(simcSlot, parsed)
   return table.concat(parts, ",")
 end
 
--- Returns the profile text, or nil plus a reason. A profile without talents sims
--- as an unspecced character and produces a number that looks real, so refusing
--- beats exporting something quietly wrong.
-function SimcExport.profile(player)
+-- Whether a profile can be built, and if not, why. Separate from building one
+-- because the answer is needed before the click: the detail panel greys its
+-- export button and puts the reason in the tooltip. Answering the same question
+-- in two places is how that button ends up live on a player SimC would refuse.
+function SimcExport.validate(player)
   if not player then return nil, "no player" end
+  -- A profile without talents sims as an unspecced character and produces a
+  -- number that looks real, so refusing beats exporting something quietly wrong.
   if not player.talents or player.talents == "" then
     return nil, "no talents captured"
   end
@@ -109,6 +112,13 @@ function SimcExport.profile(player)
   if not player.spec or player.spec == "" then
     return nil, "no spec captured"
   end
+  return true
+end
+
+-- Returns the profile text, or nil plus the reason it could not be built.
+function SimcExport.profile(player)
+  local ok, err = SimcExport.validate(player)
+  if not ok then return nil, err end
 
   local lines = {
     string.format("# %s - %s - %s/%s",

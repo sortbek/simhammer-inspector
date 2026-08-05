@@ -287,10 +287,30 @@ function Core.resetScan()
   say("cleared everything and started a fresh scan")
 end
 
-local function showBundle(players)
+-- A subject names the one player the export is about, and puts the window into
+-- single-player mode. Absent means the whole selection, which is the raid export.
+local function showBundle(players, subject)
   table.sort(players, function(a, b) return (a.name or "") < (b.name or "") end)
   local text, skipped = ns.SimcExport.bundle(players)
-  ns.Export.show(text, skipped, table.getn(players) - table.getn(skipped))
+  ns.Export.show(text, skipped, table.getn(players) - table.getn(skipped), subject)
+end
+
+-- Whether this player can be exported at all, and if not, why. Asked before the
+-- click, so the detail panel's button can grey itself and say so rather than
+-- opening a window that turns out to be empty. Same rules as the export itself,
+-- because it is the same function deciding.
+function Core.simcAvailability(guid)
+  local p = simcPlayer(guid)
+  if not p then return nil, "nothing scanned for this player yet" end
+  return ns.SimcExport.validate(p)
+end
+
+-- One player, from the detail panel. Goes through the same bundle path as the
+-- raid export rather than a second route to the same window.
+function Core.exportSimcPlayer(guid)
+  local p = simcPlayer(guid)
+  if not p then say("|cffff4444no data for that player yet|r") return end
+  showBundle({ p }, p.name or "?")
 end
 
 -- Which roles go into the export. Persisted per character, because whoever sims

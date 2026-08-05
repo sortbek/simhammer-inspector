@@ -5,7 +5,7 @@ ns.Export = Export
 
 local C = ns.Theme.colour
 
-local frame, editBox, statusText, skippedText
+local frame, editBox, statusText, skippedText, titleText, roleBar
 local roleBoxes = {}
 
 local function create()
@@ -33,10 +33,10 @@ local function create()
   titleBar:SetHeight(26)
   ns.Theme.panel(titleBar, C.header)
 
-  local title = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  title:SetPoint("LEFT", titleBar, "LEFT", 12, 0)
-  title:SetText("SimulationCraft export")
-  ns.Theme.setText(title, C.textPrimary)
+  titleText = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  titleText:SetPoint("LEFT", titleBar, "LEFT", 12, 0)
+  titleText:SetText("SimulationCraft export")
+  ns.Theme.setText(titleText, C.textPrimary)
 
   local close = CreateFrame("Button", nil, titleBar, "UIPanelCloseButton")
   close:SetPoint("RIGHT", titleBar, "RIGHT", -2, 0)
@@ -46,7 +46,7 @@ local function create()
   -- The toggles live here rather than being asked before the window opens: you
   -- usually find out you wanted tanks in it by looking at what you got, and
   -- re-running from the grid to change your mind is a worse loop.
-  local roleBar = CreateFrame("Frame", nil, frame)
+  roleBar = CreateFrame("Frame", nil, frame)
   roleBar:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -30)
   roleBar:SetSize(400, 18)
 
@@ -116,17 +116,34 @@ local function create()
   frame:Hide()
 end
 
-function Export.show(text, skipped, exported)
+-- A subject is the name of the single player the export is about. Without one
+-- the window is the raid export it has always been.
+function Export.show(text, skipped, exported, subject)
   create()
 
-  for i = 1, table.getn(roleBoxes) do roleBoxes[i]:Refresh() end
+  if subject then
+    -- Every toggle rebuilds the whole raid bundle, so leaving them live here
+    -- means one stray click throws away the profile you just opened.
+    roleBar:Hide()
+    titleText:SetText("SimulationCraft export \226\128\148 " .. subject)
+  else
+    roleBar:Show()
+    titleText:SetText("SimulationCraft export")
+    for i = 1, table.getn(roleBoxes) do roleBoxes[i]:Refresh() end
+  end
 
   editBox.payload = text
   editBox:SetText(text)
 
   if exported > 0 then
-    statusText:SetText(string.format("%d profiles  \194\183  Ctrl+C copies and closes", exported))
+    statusText:SetText(string.format("%d profile%s  \194\183  Ctrl+C copies and closes",
+                                     exported, exported == 1 and "" or "s"))
     statusText:SetTextColor(0.36, 0.74, 0.46)
+  elseif subject then
+    -- The role explanations below are about a selection this window does not
+    -- have; the skipped line underneath carries the actual reason.
+    statusText:SetText("could not build a profile for " .. subject)
+    statusText:SetTextColor(0.92, 0.70, 0.18)
   else
     -- Nothing selected and nothing matched look identical in an empty box, so
     -- say which of the two it is.

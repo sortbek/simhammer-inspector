@@ -12,8 +12,22 @@ local MAX_EMB = ns.Policy.Season.MAX_EMBELLISHMENTS
 local ROW_H = 15
 local WIDTH = 330
 
-local frame, scroll, content, titleText, subText
+local frame, scroll, content, titleText, subText, simcButton
 local slotRows = {}
+
+-- The panel redraws every couple of seconds, so the button follows the data:
+-- it comes to life the moment the scan that was missing lands, without anyone
+-- having to click away and back.
+local function refreshSimcButton(guid)
+  local ok, reason
+  -- Written out rather than folded into an `and`, which would truncate the call
+  -- to a single return value and lose the reason.
+  if guid then ok, reason = ns.Core.simcAvailability(guid) end
+
+  simcButton:SetUsable(ok and true or false)
+  simcButton:SetTooltip(ok and "Copy this player's SimulationCraft profile"
+                            or (reason or "no player selected"))
+end
 
 local function acquireRow(index)
   if not slotRows[index] then
@@ -81,6 +95,15 @@ local function create()
   -- Goes through the grid so the row highlight clears with it.
   close:SetScript("OnClick", function() ns.Grid.selectPlayer(nil) end)
 
+  -- In the title bar rather than a row of its own: the panel is already about
+  -- one player, so sitting next to their name is all the label it needs, and it
+  -- costs the slot list no height. Reads the guid off the frame rather than a
+  -- closure, which at creation time has nobody selected.
+  simcButton = ns.Theme.button(titleBar, "SimC", 46, function()
+    if frame.guid then ns.Core.exportSimcPlayer(frame.guid) end
+  end)
+  simcButton:SetPoint("RIGHT", close, "LEFT", -2, 0)
+
   subText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   subText:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -32)
   subText:SetJustifyH("LEFT")
@@ -101,6 +124,11 @@ end
 function Detail.show(guid)
   if not guid then Detail.hide() return end
   create()
+
+  -- Both set before the no-entry return below, or a button armed for the
+  -- previous player stays live on a panel that says it has no data.
+  frame.guid = guid
+  refreshSimcButton(guid)
 
   local entry = ns.Core and ns.Core.entryFor and ns.Core.entryFor(guid)
   if not entry then

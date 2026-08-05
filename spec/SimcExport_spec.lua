@@ -91,6 +91,53 @@ local function player()
   }
 end
 
+-- The same preconditions the profile enforces, asked before anything is built.
+-- The detail panel needs the answer to decide whether its export button is live,
+-- and a second copy of the rules there would drift from these.
+describe("SimcExport validate", function()
+  it("accepts a complete player", function()
+    assert.equals(true, exporter().validate(player()))
+  end)
+
+  it("rejects a player without talents", function()
+    local p = player()
+    p.talents = nil
+    local ok, err = exporter().validate(p)
+    assert.is_nil(ok)
+    assert.matches("talents", err)
+  end)
+
+  it("rejects an empty talent string, not just a missing one", function()
+    local p = player()
+    p.talents = ""
+    local ok, err = exporter().validate(p)
+    assert.is_nil(ok)
+    assert.matches("talents", err)
+  end)
+
+  it("rejects a player without a spec", function()
+    local p = player()
+    p.spec = nil
+    local ok, err = exporter().validate(p)
+    assert.is_nil(ok)
+    assert.matches("spec", err)
+  end)
+
+  it("rejects a player without a class", function()
+    local p = player()
+    p.class = nil
+    local ok, err = exporter().validate(p)
+    assert.is_nil(ok)
+    assert.matches("class", err)
+  end)
+
+  it("rejects nothing at all", function()
+    local ok, err = exporter().validate(nil)
+    assert.is_nil(ok)
+    assert.equals("string", type(err))
+  end)
+end)
+
 describe("SimcExport profile", function()
   it("opens with the class assignment", function()
     assert.matches('hunter="Shambaerth"', exporter().profile(player()))
