@@ -13,11 +13,12 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const CSV_DIR = join(ROOT, "tools", "csv");
-const DATA_DIR = join(ROOT, "SimhammerInspector", "Data");
+// The addon is the repository root, so this is simply ROOT/Data.
+const DATA_DIR = join(ROOT, "Data");
 
 // Pin the build. Regenerating against a different build is a deliberate act,
 // not something that should happen silently because a hotfix shipped.
-const BUILD = "12.0.7.68887";
+const BUILD = "12.1.0.69299";
 const VERSION = BUILD.split(".").slice(0, 3).join(".");
 const BUILD_NUMBER = BUILD.split(".")[3];
 
@@ -34,11 +35,16 @@ const GEM_QUALITY = { "13": "silver", "14": "gold" };
 // A class tier set has exactly five pieces. PvP sets have eight, crafted and
 // legacy sets have two or three, so the member count alone separates them. The
 // remaining question is which generation, and that is answered by the item IDs:
-// Midnight season 1 tier items sit in the 249955-250063 block. One curated
-// threshold rather than thirteen hand-copied set IDs, and a wrong value shows
-// up immediately as too many or too few sets.
+// Midnight season 2 tier items sit in the 271459-271567 block, a clear 21k above
+// season 1's 249955-250063. One curated threshold rather than thirteen
+// hand-copied set IDs, and a wrong value shows up immediately as too many or too
+// few sets -- which is exactly how the season 2 block was found, when 12.1 made
+// this count 26.
+//
+// This number moves once per season. The warning at the bottom of this file is
+// what tells you it needs to.
 const TIER_PIECES = 5;
-const CURRENT_TIER_MIN_ITEM_ID = 249000;
+const CURRENT_TIER_MIN_ITEM_ID = 271000;
 
 const TABLES = {
   SpellItemEnchantment: "SpellItemEnchantment.csv",

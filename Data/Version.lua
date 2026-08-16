@@ -6,6 +6,6 @@ ns.Data = ns.Data or {}
 -- DataVersion degrades on the patch version, never on the build number:
 -- build numbers rise almost weekly through hotfixes that touch no items.
 ns.Data.Version = {
-  version = "12.0.7",
-  build   = "68887",
+  version = "12.1.0",
+  build   = "69299",
 }
