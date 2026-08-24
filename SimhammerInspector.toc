@@ -4,6 +4,7 @@
 ## Author: sortbek
 ## Version: @project-version@
 ## X-License: MIT
+## X-Curse-Project-ID: 1641024
 ## SavedVariablesPerCharacter: SimhammerInspectorDB
 
 Version.lua
