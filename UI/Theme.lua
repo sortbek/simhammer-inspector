@@ -231,9 +231,13 @@ end
 
 -- A small labelled toggle. Same reasoning as Theme.button: defined once so the
 -- controls behave identically wherever they appear.
-function Theme.checkbox(parent, label, width, isChecked, onToggle)
+function Theme.checkbox(parent, label, width, isChecked, onToggle, tooltip)
   local b = CreateFrame("Button", nil, parent)
   b:SetSize(width, 18)
+
+  -- Same field and same hover behaviour as Theme.button, so a control's
+  -- explanation does not depend on which of the two shapes it happens to be.
+  b.tooltip = tooltip
 
   b.box = b:CreateTexture(nil, "ARTWORK")
   b.box:SetSize(11, 11)
@@ -261,8 +265,18 @@ function Theme.checkbox(parent, label, width, isChecked, onToggle)
   end)
   b:SetScript("OnEnter", function(self)
     if not isChecked() then Theme.setText(self.text, Theme.colour.textMuted) end
+    if self.tooltip then
+      GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+      GameTooltip:AddLine(label)
+      GameTooltip:AddLine(self.tooltip, 0.7, 0.7, 0.7, true)
+      GameTooltip:Show()
+    end
   end)
-  b:SetScript("OnLeave", function(self) self:Refresh() end)
+
+  b:SetScript("OnLeave", function(self)
+    self:Refresh()
+    GameTooltip:Hide()
+  end)
 
   b:Refresh()
   return b

@@ -447,10 +447,10 @@ end
 -- here and nothing in the interface.
 Core.HIDEABLE = {
   { kind = "upgrades_left", label = "upgrades",
-    tooltip = "Items with upgrade ranks left unspent." },
+    tooltip = "Warn about items with upgrade ranks left unspent." },
   { kind = "missing_socket", label = "sockets",
-    tooltip = "Slots that could take a socket but have none. "
-              .. "Empty sockets are always shown." },
+    tooltip = "Warn about slots that could take a socket but have none. "
+              .. "Empty sockets are always reported." },
 }
 
 -- Persisted per character, like the export's role toggles: whoever stops caring

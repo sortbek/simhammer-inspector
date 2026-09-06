@@ -620,37 +620,36 @@ function Grid.create()
     ns.Core.reportToChat()
   end, "Print the findings to chat."), reset)
 
-  local previous = place(ns.Theme.button(toolbar, "SimC", 54, function()
+  place(ns.Theme.button(toolbar, "SimC", 54, function()
     ns.Core.exportSimc()
   end, "SimulationCraft profiles, ready to paste. Pick which roles in the export window."), report)
 
-  -- Built from Core.HIDEABLE rather than written out here, so a third toggle is
-  -- one line in Core and nothing in this file. Each button carries its own
-  -- state in its label the way the sort button does, because a toolbar of
-  -- identical-looking buttons where two of them are secretly modes is worse than
-  -- a longer label.
-  for i = 1, table.getn(ns.Core.HIDEABLE) do
-    local hideable = ns.Core.HIDEABLE[i]
-
-    local function label()
-      return hideable.label .. (ns.Core.isHidden(hideable.kind) and ": off" or ": on")
-    end
-
-    local button
-    button = ns.Theme.button(toolbar, label(), 92, function()
-      ns.Core.toggleFinding(hideable.kind)
-      button.text:SetText(label())
-    end, hideable.tooltip)
-
-    previous = place(button, previous)
-  end
-
+  -- Two groups, split by the gap between them rather than by a divider anyone
+  -- has to notice: on the left the buttons that do something, on the right the
+  -- controls that only change what you are looking at. Reset throws away every
+  -- reading in the addon and used to sit in a row of identical buttons next to
+  -- one that merely hides a warning.
   sortButton = ns.Theme.button(toolbar, "sort: issues", 88, function(self)
     sortMode = (sortMode == "issues") and "name" or "issues"
     sortButton.text:SetText("sort: " .. sortMode)
     if lastEntries then Grid.refresh(lastEntries, lastCoverage) end
   end, "Order rows by severity, or alphabetically.")
   sortButton:SetPoint("RIGHT", toolbar, "RIGHT", 0, 0)
+
+  -- Checkboxes, not buttons: these are settings that stay where you put them,
+  -- and a tick reads that way where a button reads as an action. Built from
+  -- Core.HIDEABLE and anchored right to left off the sort button, so adding a
+  -- third one is a line in Core and nothing here.
+  local rightmost = sortButton
+  for i = table.getn(ns.Core.HIDEABLE), 1, -1 do
+    local hideable = ns.Core.HIDEABLE[i]
+    local box = ns.Theme.checkbox(toolbar, hideable.label, 78,
+      function() return not ns.Core.isHidden(hideable.kind) end,
+      function() ns.Core.toggleFinding(hideable.kind) end,
+      hideable.tooltip)
+    box:SetPoint("RIGHT", rightmost, "LEFT", -10, 0)
+    rightmost = box
+  end
 
   coverageText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   coverageText:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -54)
