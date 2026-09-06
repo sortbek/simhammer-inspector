@@ -130,7 +130,7 @@ end
 
 -- Builds the shape the UI renders. Findings come back flat from Rules, so they
 -- are grouped by slot here rather than in the view.
-function Core.entryFor(guid)
+function Core.entryFor(guid, includeAll)
   local info = ns.Roster.get(guid)
   if not info then return nil end
 
@@ -156,8 +156,15 @@ function Core.entryFor(guid)
 
   entry.stale = cache and cache:isStale(guid, time()) or false
 
+  -- includeAll is the detail panel asking for the whole truth. Everything else
+  -- -- cells, counters, sorting, the totals line, the cell tooltip and the
+  -- whisper -- goes through here without it, which is what makes one toggle
+  -- move all of them at once.
+  local hidden = nil
+  if not includeAll then hidden = Core.hiddenFindings() end
+
   local findings, slotView = findingsFor(guid)
-  findings = findings or {}
+  findings = ns.Rules.filterFindings(findings or {}, hidden)
   entry.tier = slotView and ns.Rules.tierStatus(slotView, context()) or nil
 
   local bySlot = {}
@@ -432,6 +439,41 @@ local function refreshGrid()
                   { confirmed = confirmed, total = total, unreachableNames = names })
 end
 
+-- Findings a raid leader can choose not to look at. Both describe gear that
+-- could be better rather than gear that is wrong, which is the kind of amber
+-- that buries the handful of items somebody actually has to go and fix.
+--
+-- The toolbar builds its buttons from this list, so a third toggle is one entry
+-- here and nothing in the interface.
+Core.HIDEABLE = {
+  { kind = "upgrades_left", label = "upgrades",
+    tooltip = "Items with upgrade ranks left unspent." },
+  { kind = "missing_socket", label = "sockets",
+    tooltip = "Slots that could take a socket but have none. "
+              .. "Empty sockets are always shown." },
+}
+
+-- Persisted per character, like the export's role toggles: whoever stops caring
+-- about upgrade ranks tends to still not care tomorrow. Absent means shown, so
+-- an upgrade adds no keys and changes nothing for anyone who never toggles.
+function Core.hiddenFindings()
+  SimhammerInspectorDB.hiddenFindings = SimhammerInspectorDB.hiddenFindings or {}
+  return SimhammerInspectorDB.hiddenFindings
+end
+
+function Core.isHidden(kind)
+  return Core.hiddenFindings()[kind] == true
+end
+
+-- Rebuilds the grid rather than waiting for the two second ticker, so the effect
+-- of a click is the screen in front of you instead of something that arrives a
+-- moment later and looks like a coincidence.
+function Core.toggleFinding(kind)
+  local hidden = Core.hiddenFindings()
+  if hidden[kind] then hidden[kind] = nil else hidden[kind] = true end
+  refreshGrid()
+end
+
 function Core.reportToChat()
   local confirmed, total, unreachable = queue:coverage(time())
   say(string.format("coverage: %d/%d confirmed", confirmed, total))
@@ -450,6 +492,8 @@ function Core.reportToChat()
 
   for guid, info in pairs(ns.Roster.all()) do
     local findings = findingsFor(guid)
+    -- A report, not the panel: it respects the same toggles the grid does.
+    if findings then findings = ns.Rules.filterFindings(findings, Core.hiddenFindings()) end
     if findings then
       local shown = {}
       for i = 1, table.getn(findings) do

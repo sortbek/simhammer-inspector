@@ -130,7 +130,10 @@ function Detail.show(guid)
   frame.guid = guid
   refreshSimcButton(guid)
 
-  local entry = ns.Core and ns.Core.entryFor and ns.Core.entryFor(guid)
+  -- true: the panel is opened deliberately to understand one player, so it shows
+  -- what the toolbar toggles hide, the same way it already shows unknowns that
+  -- the chat report leaves out.
+  local entry = ns.Core and ns.Core.entryFor and ns.Core.entryFor(guid, true)
   if not entry then
     titleText:SetText("Simhammer Inspector")
     subText:SetText("no data for this player yet")

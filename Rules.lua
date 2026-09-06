@@ -332,3 +332,21 @@ function Rules.evaluatePlayer(slots, context)
 
   return findings
 end
+
+-- Which findings a view shows is a presentation choice, but the kind strings it
+-- selects on are defined in this file. Keeping the predicate beside them means
+-- there is no second place that has to know what "upgrades_left" is called.
+--
+-- Always a new list, never the one it was handed: the grid asks for a filtered
+-- view and the detail panel for the complete one, both off the same findings, so
+-- neither may quietly decide what the other sees.
+function Rules.filterFindings(findings, hidden)
+  local out = {}
+  for i = 1, table.getn(findings) do
+    local f = findings[i]
+    if not (hidden and hidden[f.kind]) then
+      out[table.getn(out) + 1] = f
+    end
+  end
+  return out
+end

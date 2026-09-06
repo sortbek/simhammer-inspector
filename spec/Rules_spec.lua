@@ -608,3 +608,62 @@ describe("Rules player-wide checks", function()
     assert.equals(1, f.slot)
   end)
 end)
+
+-- Which findings a view chooses to show is not a question about gear, but the
+-- kind strings being filtered on are defined in this file. Keeping the predicate
+-- here means there is no second place that has to know what "upgrades_left" is
+-- called.
+describe("Rules finding filter", function()
+  local function findings()
+    return {
+      { slot = 1, kind = "missing_enchant", severity = "error" },
+      { slot = 1, kind = "upgrades_left",   severity = "warn" },
+      { slot = 9, kind = "missing_socket",  severity = "warn" },
+      { slot = 9, kind = "empty_socket",    severity = "error" },
+    }
+  end
+
+  local function kinds(list)
+    local out = {}
+    for i = 1, table.getn(list) do out[i] = list[i].kind end
+    return out
+  end
+
+  it("keeps everything when nothing is hidden", function()
+    local ns = fresh()
+    assert.same({ "missing_enchant", "upgrades_left", "missing_socket", "empty_socket" },
+                kinds(ns.Rules.filterFindings(findings(), nil)))
+  end)
+
+  it("drops the kinds it is told to hide", function()
+    local ns = fresh()
+    local kept = ns.Rules.filterFindings(findings(), { upgrades_left = true })
+    assert.same({ "missing_enchant", "missing_socket", "empty_socket" }, kinds(kept))
+  end)
+
+  it("hides several kinds at once", function()
+    local ns = fresh()
+    local kept = ns.Rules.filterFindings(findings(),
+                                         { upgrades_left = true, missing_socket = true })
+    assert.same({ "missing_enchant", "empty_socket" }, kinds(kept))
+  end)
+
+  -- An empty socket is an error about gear that is wrong now; a missing one is a
+  -- warning about gear that could be better. Hiding the second must never take
+  -- the first with it.
+  it("leaves empty sockets alone when missing ones are hidden", function()
+    local ns = fresh()
+    local kept = ns.Rules.filterFindings(findings(), { missing_socket = true })
+    assert.equals("empty_socket", kept[table.getn(kept)].kind)
+  end)
+
+  -- The detail panel asks for the unfiltered list while the grid asks for a
+  -- filtered one, off the same findings. Returning a new table is what stops the
+  -- first caller from deciding what the second one sees.
+  it("returns a new list rather than editing the one it was given", function()
+    local ns = fresh()
+    local original = findings()
+    ns.Rules.filterFindings(original, { upgrades_left = true })
+    assert.equals(4, table.getn(original))
+  end)
+end)
