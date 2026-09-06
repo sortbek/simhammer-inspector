@@ -102,6 +102,9 @@ Theme.metrics = {
   -- and gives the grid room to breathe.
   cellSize     = 19,
   cellGap      = 3,
+  -- The wider breathing space between slot groups (armour, jewellery,
+  -- weapons); which slots end a group is Grid's gapsBefore.
+  groupGap     = 7,
   iconSize     = 14,
   nameWidth    = 148,
   ilvlWidth    = 46,
@@ -109,9 +112,10 @@ Theme.metrics = {
   embWidth     = 34,
   summaryWidth = 40,
   padding      = 12,
-  -- Title bar, toolbar, coverage, totals, the not-answering line and a row of
-  -- slot icons, none of them crowding each other.
-  headerHeight = 118,
+  -- Title bar, toolbar, the scan bar with its status line, and a row of slot
+  -- icons. Three stacked text lines used to live here; one line and a bar say
+  -- the same things in 24 fewer pixels.
+  headerHeight = 94,
 }
 
 -- Item quality colours, for item names in the detail panel. Blizzard exposes

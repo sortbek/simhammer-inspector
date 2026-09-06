@@ -27,16 +27,46 @@ local MAX_EMB = ns.Policy.Season.MAX_EMBELLISHMENTS
 local M = ns.Theme.metrics
 local C = ns.Theme.colour
 
-local frame, content, coverageText, subText, totalsText, sortButton
+local frame, content, statusText, statusFrame, scanTrack, scanFill
 local rows = {}
 local sortMode = "issues"
 local lastEntries, lastCoverage
 local selectedGuid
 local lastScanMarker
+local lastUnreachable
+
+-- Header FontStrings by sort mode, so the active column head can wear the
+-- accent colour and hand it over when the sort changes.
+local headerLabels = {}
+
+local function refreshHeaderColours()
+  for mode, fs in pairs(headerLabels) do
+    ns.Theme.setText(fs, mode == sortMode and C.accent or C.textFaint)
+  end
+end
+
+-- A wider gap after the armour block (feet) and after the jewellery block
+-- (second trinket): sixteen identical cells are unscannable as one strip, and
+-- armour / jewellery / weapons is how people already think about a character.
+local GROUP_ENDS = { [8] = true, [14] = true }  -- feet, trinket 2
+
+-- How many group gaps sit left of each cell index. Computed once, with an
+-- entry for the summary column too so everything right of the cells shifts
+-- along with them.
+local gapsBefore = {}
+do
+  local gaps = 0
+  for i = 1, table.getn(SLOTS) do
+    gapsBefore[i] = gaps
+    if GROUP_ENDS[SLOTS[i]] then gaps = gaps + 1 end
+  end
+  gapsBefore[table.getn(SLOTS) + 1] = gaps
+end
 
 local function gridWidth()
   return M.nameWidth + M.ilvlWidth + M.tierWidth + M.embWidth
          + (table.getn(SLOTS) * (M.cellSize + M.cellGap))
+         + gapsBefore[table.getn(SLOTS) + 1] * M.groupGap
          + M.summaryWidth
 end
 
@@ -47,6 +77,7 @@ local function embX()  return tierX() + M.tierWidth end
 
 local function cellX(index)
   return embX() + M.embWidth + (index - 1) * (M.cellSize + M.cellGap)
+         + gapsBefore[index] * M.groupGap
 end
 
 local function makeCell(parent, index)
@@ -137,10 +168,12 @@ local function makeRow(index)
   row.name:SetWidth(M.nameWidth - (M.iconSize * 2) - 20)
   row.name:SetJustifyH("LEFT")
 
+  -- The number columns are right-aligned: "678.4" over "--" over "645.2" only
+  -- reads as one column when the digits share an edge.
   row.ilvl = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   row.ilvl:SetPoint("LEFT", row, "LEFT", M.nameWidth, 0)
   row.ilvl:SetWidth(M.ilvlWidth - 8)
-  row.ilvl:SetJustifyH("LEFT")
+  row.ilvl:SetJustifyH("RIGHT")
 
   -- Tier and embellishments get their own columns rather than living inside a
   -- per-slot cell: both are properties of the whole character, so neither has a
@@ -149,12 +182,12 @@ local function makeRow(index)
   row.tier = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   row.tier:SetPoint("LEFT", row, "LEFT", tierX(), 0)
   row.tier:SetWidth(M.tierWidth - 6)
-  row.tier:SetJustifyH("LEFT")
+  row.tier:SetJustifyH("RIGHT")
 
   row.emb = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   row.emb:SetPoint("LEFT", row, "LEFT", embX(), 0)
   row.emb:SetWidth(M.embWidth - 6)
-  row.emb:SetJustifyH("LEFT")
+  row.emb:SetJustifyH("RIGHT")
 
   row.cells = {}
   for i = 1, table.getn(SLOTS) do
@@ -371,7 +404,7 @@ end
 
 -- Fresh unknown must never sort below stale bad: an old red cell is a weaker
 -- claim than a current grey one, and sorting on severity alone hides that.
-local function comparator(a, b)
+local function byIssues(a, b)
   if a.stale ~= b.stale then return b.stale end
   if a.errors ~= b.errors then return a.errors > b.errors end
   if a.warnings ~= b.warnings then return a.warnings > b.warnings end
@@ -379,15 +412,81 @@ local function comparator(a, b)
   return (a.name or "") < (b.name or "")
 end
 
+-- The numeric columns share a shape: entries without a reading sort last, the
+-- rest by key ascending, ties by name. Each key is chosen so the top of the
+-- list is where the work is -- a column click answers "who needs attention
+-- here", not "who is winning".
+local function keyed(keyOf)
+  return function(a, b)
+    local ka, kb = keyOf(a), keyOf(b)
+    if ka ~= kb then return ka < kb end
+    return (a.name or "") < (b.name or "")
+  end
+end
+
+local COMPARATORS = {
+  issues = byIssues,
+  name = keyed(function() return 0 end),
+  ilvl = keyed(function(e) return e.ilvl or math.huge end),
+  tier = keyed(function(e)
+    if not e.tier then return math.huge end
+    return -math.max(0, e.tier.required - e.tier.worn)
+  end),
+  emb = keyed(function(e)
+    local emb = e.embellishments
+    if not emb or emb.total == 0 then return math.huge end
+    return -math.max(0, MAX_EMB - emb.found)
+  end),
+}
+
+-- Which order each column head applies. Unknown modes fall back to the issue
+-- sort, which is also the default the window opens with.
+function Grid.comparatorFor(mode)
+  return COMPARATORS[mode] or byIssues
+end
+
+-- Clicking a column head lands here; the mode names match comparatorFor.
+function Grid.setSort(mode)
+  sortMode = mode
+  refreshHeaderColours()
+  if lastEntries then Grid.refresh(lastEntries, lastCoverage) end
+end
+
+-- The status line tells the scan's story and nothing else: how far the
+-- build-up is, and who has not answered. What the findings amount to is the
+-- grid's own job -- a tally of errors and warnings above it repeated what the
+-- rows already show. Pure string building, which is what lets the spec
+-- exercise it without a client.
+function Grid.statusFor(coverage)
+  -- The build-up phase is called out explicitly. Without it the first couple
+  -- of minutes of a mostly-grey grid reads as a broken addon.
+  local scanning = coverage.confirmed < coverage.total
+  local bits = {}
+  if scanning and coverage.confirmed == 0 then
+    bits[1] = ns.Theme.hex(S.warn) .. "Scanning|r"
+  else
+    bits[1] = string.format("%s%d / %d confirmed|r",
+                            ns.Theme.hex(scanning and S.warn or S.ok),
+                            coverage.confirmed, coverage.total)
+  end
+
+  -- Count only; the names live in the status line's tooltip. "not answering",
+  -- not "out of range": a timeout means no reply arrived, and claiming a cause
+  -- the addon cannot establish is what the evidence model exists to prevent.
+  local unreachable = table.getn(coverage.unreachableNames)
+  if unreachable > 0 then
+    bits[table.getn(bits) + 1] =
+      string.format("%s%d|r not answering", ns.Theme.hex(S.unknown), unreachable)
+  end
+
+  return table.concat(bits, "   \194\183   ")
+end
+
 function Grid.refresh(entries, coverage)
   if not frame then return end
   lastEntries, lastCoverage = entries, coverage
 
-  if sortMode == "issues" then
-    table.sort(entries, comparator)
-  else
-    table.sort(entries, function(a, b) return (a.name or "") < (b.name or "") end)
-  end
+  table.sort(entries, Grid.comparatorFor(sortMode))
 
   for i = 1, table.getn(entries) do
     Grid.updateRow(i, entries[i])
@@ -411,78 +510,34 @@ function Grid.refresh(entries, coverage)
   content:SetHeight(math.max(1, visibleRows * M.rowHeight))
   frame:SetHeight(M.headerHeight + visibleRows * M.rowHeight + M.padding * 2)
 
-  -- Totals first: the coverage line needs to know whether anything is wrong
-  -- before it can decide what to say.
-  local players, errors, warnings, missingEmb = 0, 0, 0, 0
-  for i = 1, table.getn(entries) do
-    local e = entries[i]
-    errors = errors + e.errors
-    warnings = warnings + e.warnings
-    if e.errors > 0 or e.warnings > 0 then players = players + 1 end
-    if e.embellishments and e.embellishments.known == e.embellishments.total
-       and e.embellishments.total > 0 and e.embellishments.found < MAX_EMB then
-      missingEmb = missingEmb + 1
-    end
-  end
+  statusText:SetText(Grid.statusFor(coverage))
 
-  -- The build-up phase is called out explicitly. Without it the first couple of
-  -- minutes of a mostly-grey grid reads as a broken addon.
-  local scanning = coverage.confirmed < coverage.total
-  if scanning and coverage.confirmed == 0 then
-    coverageText:SetText("Scanning")
-    coverageText:SetTextColor(S.warn[1], S.warn[2], S.warn[3])
-  else
-    local text = string.format("%d / %d confirmed", coverage.confirmed, coverage.total)
-    if scanning then
-      coverageText:SetTextColor(S.warn[1], S.warn[2], S.warn[3])
+  -- The names behind the "not answering" count, read on hover instead of
+  -- taking a line of their own. Mouse only when there is something to show, so
+  -- the strip does not eat window drags the rest of the time.
+  lastUnreachable = coverage.unreachableNames
+  statusFrame:EnableMouse(table.getn(lastUnreachable) > 0)
+
+  -- A thin bar makes build-up progress visible at a glance and disappears once
+  -- the answer is complete.
+  if coverage.total > 0 and coverage.confirmed < coverage.total then
+    scanTrack:Show()
+    local w = gridWidth() * coverage.confirmed / coverage.total
+    if w >= 1 then
+      scanFill:SetWidth(w)
+      scanFill:Show()
     else
-      coverageText:SetTextColor(S.ok[1], S.ok[2], S.ok[3])
-      if errors == 0 and warnings == 0 then
-        text = text .. "   \194\183   everyone is clean"
-      end
+      scanFill:Hide()
     end
-    coverageText:SetText(text)
+  else
+    scanTrack:Hide()
+    scanFill:Hide()
   end
 
   -- The panel reads the same live data as the grid, so it has to follow along:
   -- a slot that gets confirmed while you are looking at it should update rather
   -- than sit there stale until you click away and back.
   if selectedGuid then ns.Detail.show(selectedGuid) end
-
-  -- "not answering", not "out of range": a timeout means no reply arrived, and
-  -- the cause may be distance or a dropped request. Claiming a cause the addon
-  -- cannot establish is the mistake the evidence model exists to prevent.
-  if table.getn(coverage.unreachableNames) > 0 then
-    subText:SetText(string.format("%d not answering: %s",
-                    table.getn(coverage.unreachableNames),
-                    table.concat(coverage.unreachableNames, ", ")))
-  else
-    subText:SetText("")
-  end
-
-  -- An aggregate line answers the question the grid cannot: how much work is
-  -- there in total, and is it worth holding the pull for.
-  local bits = {}
-  if players > 0 then
-    bits[table.getn(bits) + 1] = string.format("|cffe0e2e8%d|r players need attention", players)
-  end
-  if errors > 0 then
-    bits[table.getn(bits) + 1] = string.format("|cffee5050%d|r errors", errors)
-  end
-  if warnings > 0 then
-    bits[table.getn(bits) + 1] = string.format("|cffeab32e%d|r warnings", warnings)
-  end
-  if missingEmb > 0 then
-    bits[table.getn(bits) + 1] = string.format("|cffeab32e%d|r short on embellishments", missingEmb)
-  end
-
-  -- When there is nothing wrong, the coverage line already says everything worth
-  -- saying. A second green line underneath repeating it in other words is noise.
-  if table.getn(bits) == 0 then
-    totalsText:SetText("")
-  else
-    totalsText:SetText(table.concat(bits, "   \194\183   "))
-  end
 end
 
 local function buildHeader()
@@ -490,20 +545,48 @@ local function buildHeader()
   header:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -M.headerHeight + 18)
   header:SetSize(gridWidth(), 18)
 
-  local function label(text, x, width)
-    local fs = header:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    fs:SetPoint("LEFT", header, "LEFT", x, 0)
-    fs:SetWidth(width)
-    fs:SetJustifyH("LEFT")
+  -- Column heads are the sort control: clicking one orders the grid by that
+  -- column, and the accent colour marks which one is in charge. A dedicated
+  -- "sort:" button in the toolbar was a second place to look for something
+  -- that belongs where every other list puts it.
+  local function label(text, x, width, justify, mode, tooltip)
+    local b = CreateFrame("Button", nil, header)
+    b:SetPoint("LEFT", header, "LEFT", x, 0)
+    b:SetSize(width, 18)
+
+    local fs = b:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    fs:SetAllPoints()
+    fs:SetJustifyH(justify)
     fs:SetText(text)
-    ns.Theme.setText(fs, C.textFaint)
-    return fs
+    headerLabels[mode] = fs
+
+    b:SetScript("OnClick", function() Grid.setSort(mode) end)
+    b:SetScript("OnEnter", function(self)
+      if sortMode ~= mode then ns.Theme.setText(fs, C.textMuted) end
+      GameTooltip:SetOwner(self, "ANCHOR_TOP")
+      GameTooltip:AddLine(tooltip)
+      GameTooltip:Show()
+    end)
+    b:SetScript("OnLeave", function()
+      refreshHeaderColours()
+      GameTooltip:Hide()
+    end)
+    return b
   end
 
-  label("PLAYER", 8, M.nameWidth - 8)
-  label("ILVL", M.nameWidth, M.ilvlWidth)
-  label("TIER", tierX(), M.tierWidth)
-  label("EMB", embX(), M.embWidth)
+  -- The number columns are right-aligned, so their heads sit over the same box
+  -- the row text uses -- give the head the full column width and it drifts
+  -- from its digits by exactly the text inset.
+  label("PLAYER", 8, M.nameWidth - 8, "LEFT", "name", "Sort by name")
+  label("ILVL", M.nameWidth, M.ilvlWidth - 8, "RIGHT", "ilvl",
+        "Sort by item level, lowest first")
+  label("TIER", tierX(), M.tierWidth - 6, "RIGHT", "tier",
+        "Sort by missing tier pieces")
+  label("EMB", embX(), M.embWidth - 6, "RIGHT", "emb",
+        "Sort by missing embellishments")
+  label("ISSUES", cellX(table.getn(SLOTS) + 1) + 4, M.summaryWidth, "LEFT",
+        "issues", "Sort by severity, worst first")
+  refreshHeaderColours()
 
   -- Icons rather than two-letter abbreviations. The abbreviations had to be
   -- learned, and worse, wide pairs like "MH" did not fit the column and were
@@ -626,45 +709,65 @@ function Grid.create()
 
   -- Two groups, split by the gap between them rather than by a divider anyone
   -- has to notice: on the left the buttons that do something, on the right the
-  -- controls that only change what you are looking at. Reset throws away every
+  -- toggles that only change what you are looking at. Reset throws away every
   -- reading in the addon and used to sit in a row of identical buttons next to
   -- one that merely hides a warning.
-  sortButton = ns.Theme.button(toolbar, "sort: issues", 88, function(self)
-    sortMode = (sortMode == "issues") and "name" or "issues"
-    sortButton.text:SetText("sort: " .. sortMode)
-    if lastEntries then Grid.refresh(lastEntries, lastCoverage) end
-  end, "Order rows by severity, or alphabetically.")
-  sortButton:SetPoint("RIGHT", toolbar, "RIGHT", 0, 0)
-
+  --
   -- Checkboxes, not buttons: these are settings that stay where you put them,
   -- and a tick reads that way where a button reads as an action. Built from
-  -- Core.HIDEABLE and anchored right to left off the sort button, so adding a
-  -- third one is a line in Core and nothing here.
-  local rightmost = sortButton
+  -- Core.HIDEABLE and anchored right to left, so adding a third one is a line
+  -- in Core and nothing here.
+  local rightmost
   for i = table.getn(ns.Core.HIDEABLE), 1, -1 do
     local hideable = ns.Core.HIDEABLE[i]
     local box = ns.Theme.checkbox(toolbar, hideable.label, 78,
       function() return not ns.Core.isHidden(hideable.kind) end,
       function() ns.Core.toggleFinding(hideable.kind) end,
       hideable.tooltip)
-    box:SetPoint("RIGHT", rightmost, "LEFT", -10, 0)
+    if rightmost then
+      box:SetPoint("RIGHT", rightmost, "LEFT", -10, 0)
+    else
+      box:SetPoint("RIGHT", toolbar, "RIGHT", 0, 0)
+    end
     rightmost = box
   end
 
-  coverageText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  coverageText:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -54)
-  coverageText:SetJustifyH("LEFT")
+  -- Scan progress as a thin bar rather than a coloured word: how far along the
+  -- build-up is was the one number the old header made you read to find out.
+  scanTrack = frame:CreateTexture(nil, "ARTWORK")
+  scanTrack:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -51)
+  scanTrack:SetSize(gridWidth(), 3)
+  scanTrack:SetColorTexture(1, 1, 1, 0.06)
+  scanTrack:Hide()
 
-  totalsText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  totalsText:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -70)
-  totalsText:SetPoint("RIGHT", frame, "RIGHT", -M.padding, 0)
-  totalsText:SetJustifyH("LEFT")
+  scanFill = frame:CreateTexture(nil, "OVERLAY")
+  scanFill:SetPoint("TOPLEFT", scanTrack, "TOPLEFT", 0, 0)
+  scanFill:SetHeight(3)
+  scanFill:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 0.9)
+  scanFill:Hide()
 
-  subText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  subText:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -84)
-  subText:SetPoint("RIGHT", frame, "RIGHT", -M.padding, 0)
-  subText:SetJustifyH("LEFT")
-  ns.Theme.setText(subText, C.textFaint)
+  -- One status line where three used to stack. A frame rather than a bare
+  -- FontString because the "not answering" count keeps its names in a tooltip.
+  statusFrame = CreateFrame("Frame", nil, frame)
+  statusFrame:SetPoint("TOPLEFT", frame, "TOPLEFT", M.padding, -58)
+  statusFrame:SetSize(gridWidth(), 14)
+  statusFrame:EnableMouse(false)
+
+  statusText = statusFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  statusText:SetAllPoints()
+  statusText:SetJustifyH("LEFT")
+  ns.Theme.setText(statusText, C.textMuted)
+
+  statusFrame:SetScript("OnEnter", function(self)
+    if not lastUnreachable or table.getn(lastUnreachable) == 0 then return end
+    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+    GameTooltip:AddLine("not answering")
+    for i = 1, table.getn(lastUnreachable) do
+      GameTooltip:AddLine(lastUnreachable[i], 0.7, 0.7, 0.7)
+    end
+    GameTooltip:Show()
+  end)
+  statusFrame:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
   buildHeader()
 
