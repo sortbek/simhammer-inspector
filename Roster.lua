@@ -41,10 +41,18 @@ function Roster.refresh()
   local seen = {}
   local tokens = unitTokens()
 
+  -- Whether every listed unit could be identified. In instanced combat UnitGUID
+  -- can return a secret value (see Evidence.usableGuid), and a pass that could
+  -- not read someone must not conclude anyone left: unseen means removed, and
+  -- removal throws away their scan state.
+  local blind = false
+
   for i = 1, table.getn(tokens) do
     local unit = tokens[i]
     local guid = UnitGUID(unit)
-    if guid and UnitIsPlayer(unit) then
+    if not ns.Evidence.usableGuid(guid) then
+      blind = true
+    elseif UnitIsPlayer(unit) then
       seen[guid] = true
       local _, class = UnitClass(unit)
       local name, realm = UnitName(unit)
@@ -65,6 +73,12 @@ function Roster.refresh()
       if isNew then notify("added", guid, info) end
     end
   end
+
+  -- A blind pass skips removals entirely: it cannot tell "left the group" from
+  -- "could not be identified this time". The next clean refresh sweeps anyone
+  -- who really left, so the cost is a stale row for one cycle, not a raid's
+  -- worth of scan state dropped mid-pull.
+  if blind then return end
 
   for guid in pairs(members) do
     if not seen[guid] then

@@ -13,6 +13,26 @@ local NO_TOOLTIP = {
   tooltipComplete = false, itemLoaded = true,
 }
 
+-- Patch 12.0's secret values cannot be verified out of game, but what makes
+-- them lethal here can: a value that throws when used as a table key. NaN is
+-- vanilla Lua's specimen of that species, so it stands in for a secret guid.
+describe("Evidence usableGuid", function()
+  it("accepts an ordinary guid string", function()
+    local E = evidence()
+    assert.truthy(E.usableGuid("Player-1303-0D2BAFC9"))
+  end)
+
+  it("rejects nil", function()
+    local E = evidence()
+    assert.falsy(E.usableGuid(nil))
+  end)
+
+  it("rejects a value that cannot index a table", function()
+    local E = evidence()
+    assert.falsy(E.usableGuid(0 / 0))
+  end)
+end)
+
 describe("Evidence fingerprint", function()
   it("returns the same number for the same string", function()
     local E = evidence()

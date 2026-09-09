@@ -10,6 +10,23 @@ ns.Evidence = Evidence
 -- -- the most expensive thing this addon exists to catch.
 Evidence.SOURCES = { "linkComplete", "socketsKnown", "tooltipComplete", "itemLoaded", "absent" }
 
+-- Patch 12.0's secret values: in instanced combat UnitGUID can return a secret
+-- string, which an addon may hold but not use as a table key -- and a table key
+-- is the only thing this addon does with a guid. A guid that cannot key a table
+-- identifies nobody, so it is rejected at the doors where guids come in from
+-- the client rather than guarded at every lookup. Probed by writing, not
+-- branching: a boolean test on a secret string does not throw, which is how one
+-- travelled two calls deep before the first crash.
+local PROBE = {}
+local function tryKey(guid)
+  PROBE[guid] = true
+  PROBE[guid] = nil
+end
+
+function Evidence.usableGuid(guid)
+  return (pcall(tryKey, guid))
+end
+
 -- djb2, explicitly bounded to 2^32. The bound is not an optimisation but a
 -- correctness requirement: WoW runs Lua 5.1 where numbers are doubles with a
 -- 53-bit mantissa, while 5.3+ uses 64-bit integers that wrap. Staying under

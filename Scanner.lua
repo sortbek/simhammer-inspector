@@ -186,6 +186,9 @@ local function resolveUnit(guid)
 end
 
 local function onInspectReady(guid)
+  -- A secret guid (see Evidence.usableGuid) identifies nobody. Treated exactly
+  -- like a reply that never arrived, which the timeout path already handles.
+  if not ns.Evidence.usableGuid(guid) then return end
 
   local unit, how = resolveUnit(guid)
   if not unit then
@@ -450,8 +453,11 @@ function Scanner.init(q, c, r)
     elseif event == "PLAYER_REGEN_ENABLED" or event == "ENCOUNTER_END" then
       paused = false
     elseif event == "UNIT_IN_RANGE_UPDATE" then
+      -- In instanced combat this guid can be secret (see Evidence.usableGuid).
+      -- Dropping the event equals never receiving it, which the queue already
+      -- survives: timeouts are the real signal, a wake-up is only a shortcut.
       local guid = UnitGUID(arg1)
-      if guid then queue:onInRange(guid, serverNow()) end
+      if ns.Evidence.usableGuid(guid) then queue:onInRange(guid, serverNow()) end
     end
   end)
 
@@ -498,10 +504,16 @@ function Scanner.inspectTarget(onDone)
   end
 
   local guid = UnitGUID("target")
+  -- Secret in instanced combat (see Evidence.usableGuid), and everything below
+  -- keys records and compares event payloads by this value.
+  if not ns.Evidence.usableGuid(guid) then
+    return false, "cannot identify the target right now"
+  end
+
   local waiting = CreateFrame("Frame")
   waiting:RegisterEvent("INSPECT_READY")
   waiting:SetScript("OnEvent", function(self, _, readyGuid)
-    if readyGuid ~= guid then return end
+    if not ns.Evidence.usableGuid(readyGuid) or readyGuid ~= guid then return end
     self:UnregisterAllEvents()
     self:SetScript("OnEvent", nil)
     -- One frame of slack, the same reason the roster path defers: the talent
