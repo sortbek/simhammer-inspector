@@ -18,7 +18,7 @@ const DATA_DIR = join(ROOT, "Data");
 
 // Pin the build. Regenerating against a different build is a deliberate act,
 // not something that should happen silently because a hotfix shipped.
-const BUILD = "12.1.0.69299";
+const BUILD = "12.1.5.70448";
 const VERSION = BUILD.split(".").slice(0, 3).join(".");
 const BUILD_NUMBER = BUILD.split(".")[3];
 
