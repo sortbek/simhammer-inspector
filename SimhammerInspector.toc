@@ -1,4 +1,4 @@
-## Interface: 120100
+## Interface: 120105
 ## Title: Simhammer Inspector
 ## Notes: Live raid gear inspection.
 ## Author: sortbek
